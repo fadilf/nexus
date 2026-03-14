@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { getThread, addMessage, updateMessage } from "@/lib/thread-store";
 import { getProcessManager } from "@/lib/process-manager";
 import { createStreamParser } from "@/lib/stream-parser";
-import { AgentModel } from "@/lib/types";
+import { AgentModel, MessageImage } from "@/lib/types";
 import { getWorkingDirectory } from "@/lib/thread-store";
 import { loadAgents } from "@/lib/agent-store";
 import { buildContextualPrompt } from "@/lib/context";
+import path from "path";
+import { getUploadsDir } from "@/lib/config";
 
 export async function POST(
   request: Request,
@@ -17,7 +19,10 @@ export async function POST(
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  const { agentId, prompt } = (await request.json()) as { agentId: string; prompt: string };
+  const { agentId, prompt, images } = (await request.json()) as { agentId: string; prompt: string; images?: MessageImage[] };
+
+  // Resolve image paths
+  const imagePaths = images?.map((img) => path.join(getUploadsDir(), img.filename)) ?? [];
 
   // Resolve fresh agent data from store (picks up personality edits)
   const allAgents = await loadAgents();
@@ -34,18 +39,29 @@ export async function POST(
   const existing = pm.getProcess(threadId, agentId);
   if (existing) {
     // Return existing buffer as SSE stream then continue piping
+    const reattachParser = createStreamParser(agent.model as AgentModel);
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();
-        // Send buffered content
+        // Send buffered content through parser
         for (const chunk of existing.buffer) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", text: chunk })}\n\n`));
+          const events = reattachParser(chunk);
+          for (const event of events) {
+            if (event.type === "content") {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            }
+          }
         }
 
-        // Pipe future output
+        // Pipe future output through parser
         existing.process.stdout?.on("data", (data: Buffer) => {
           try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", text: data.toString() })}\n\n`));
+            const events = reattachParser(data.toString());
+            for (const event of events) {
+              if (event.type === "content") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              }
+            }
           } catch {
             // Controller closed
           }
@@ -114,6 +130,15 @@ export async function POST(
                 } catch {
                   // Client disconnected
                 }
+              } else if (event.type === "error") {
+                // API-level error from the CLI (e.g. rate limit, auth failure)
+                const errorText = `[Error: ${event.message}]`;
+                accumulatedContent += accumulatedContent ? `\n\n${errorText}` : errorText;
+                try {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+                } catch {
+                  // Client disconnected
+                }
               }
             }
 
@@ -156,7 +181,8 @@ export async function POST(
             }
           },
           hasHistory,
-          agent.personality
+          agent.personality,
+          imagePaths.length > 0 ? imagePaths : undefined
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";

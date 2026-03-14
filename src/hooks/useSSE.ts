@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { Agent } from "@/lib/types";
+import { Agent, MessageImage } from "@/lib/types";
 
 type StreamingMessage = {
   agentId: string;
@@ -16,7 +16,7 @@ export function useAgentStream(threadId: string | null) {
   const isStreaming = streamingMessages.size > 0;
 
   const streamAgent = useCallback(
-    async (agentId: string, prompt: string) => {
+    async (agentId: string, prompt: string, images?: MessageImage[]) => {
       if (!threadId) return;
 
       const controller = new AbortController();
@@ -32,7 +32,7 @@ export function useAgentStream(threadId: string | null) {
         const res = await fetch(`/api/threads/${threadId}/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentId, prompt }),
+          body: JSON.stringify({ agentId, prompt, ...(images && images.length > 0 ? { images } : {}) }),
           signal: controller.signal,
         });
 
@@ -95,13 +95,13 @@ export function useAgentStream(threadId: string | null) {
   );
 
   const sendMessage = useCallback(
-    async (content: string, targetAgents: Agent[]) => {
+    async (content: string, targetAgents: Agent[], images?: MessageImage[]) => {
       if (!threadId) return;
       setError(null);
 
       // Start streams for all target agents in parallel
       await Promise.all(
-        targetAgents.map((agent) => streamAgent(agent.id, content))
+        targetAgents.map((agent) => streamAgent(agent.id, content, images))
       );
     },
     [threadId, streamAgent]

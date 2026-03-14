@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 import { NEXUS_DIR, THREADS_DIR } from "./config";
-import { Thread, Message, ThreadWithMessages, ThreadListItem } from "./types";
+import { Thread, Message, ThreadWithMessages, ThreadListItem, Agent } from "./types";
 
 function getWorkingDirectory(): string {
   return process.env.NEXUS_PROJECT_DIR || process.cwd();
@@ -153,6 +153,22 @@ export async function archiveThread(threadId: string, archived: boolean): Promis
     const thread = await getThread(threadId);
     if (!thread) return null;
     thread.archived = archived;
+    thread.updatedAt = new Date().toISOString();
+    await writeFile(getThreadPath(threadId), JSON.stringify(thread, null, 2));
+    return thread;
+  });
+}
+
+export async function addAgentsToThread(threadId: string, newAgents: Agent[]): Promise<ThreadWithMessages | null> {
+  return withLock(threadId, async () => {
+    const thread = await getThread(threadId);
+    if (!thread) return null;
+
+    const existingIds = new Set(thread.agents.map((a) => a.id));
+    const toAdd = newAgents.filter((a) => !existingIds.has(a.id));
+    if (toAdd.length === 0) return thread;
+
+    thread.agents.push(...toAdd);
     thread.updatedAt = new Date().toISOString();
     await writeFile(getThreadPath(threadId), JSON.stringify(thread, null, 2));
     return thread;

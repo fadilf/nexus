@@ -9,9 +9,33 @@ type ProcessEntry = {
   agentId: string;
   status: "running" | "error";
   buffer: string[]; // Recent stdout chunks for re-attachment
+  stderrBuffer: string[]; // Stderr output (not shown as content)
 };
 
 const MAX_BUFFER_CHUNKS = 100;
+
+/**
+ * Extract a user-friendly error message from raw stderr output.
+ * Looks for common error patterns and avoids dumping stack traces.
+ */
+function summarizeStderr(stderr: string): string {
+  // Look for common error patterns
+  const patterns = [
+    /Error: (.+?)(?:\n|$)/,           // Generic "Error: message"
+    /GaxiosError: (.+?)(?:\n|$)/,     // Google API errors
+    /error: (.+?)(?:\n|$)/i,          // Lowercase error
+    /failed with status (\d+)/i,      // HTTP status failures
+  ];
+
+  for (const pattern of patterns) {
+    const match = stderr.match(pattern);
+    if (match) return match[0].trim();
+  }
+
+  // Fallback: first meaningful line, capped at 200 chars
+  const firstLine = stderr.split("\n").find((l) => l.trim().length > 0)?.trim() ?? stderr.trim();
+  return firstLine.length > 200 ? firstLine.slice(0, 200) + "..." : firstLine;
+}
 
 class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
@@ -45,7 +69,8 @@ class ProcessManager {
     onClose: (code: number | null) => void,
     onError: (err: Error) => void,
     hasHistory: boolean = false,
-    personality?: string
+    personality?: string,
+    imagePaths?: string[]
   ): ChildProcess {
     const k = this.key(threadId, agentId);
 
@@ -55,7 +80,7 @@ class ProcessManager {
     const sessionId = this.getSessionId(threadId, agentId);
     const isResume = this.usedSessions.has(sessionId) || hasHistory;
 
-    const { cmd, args } = getCliCommand(model, prompt, sessionId, isResume, personality);
+    const { cmd, args } = getCliCommand(model, prompt, sessionId, isResume, personality, imagePaths);
 
     const child = spawn(cmd, args, {
       cwd,
@@ -69,6 +94,7 @@ class ProcessManager {
       agentId,
       status: "running",
       buffer: [],
+      stderrBuffer: [],
     };
     this.processes.set(k, entry);
 
@@ -83,11 +109,11 @@ class ProcessManager {
 
     child.stderr?.on("data", (data: Buffer) => {
       const chunk = data.toString();
-      entry.buffer.push(chunk);
-      if (entry.buffer.length > MAX_BUFFER_CHUNKS) {
-        entry.buffer.shift();
+      entry.stderrBuffer.push(chunk);
+      if (entry.stderrBuffer.length > MAX_BUFFER_CHUNKS) {
+        entry.stderrBuffer.shift();
       }
-      onData(chunk);
+      // Don't forward stderr as content — it's collected for error reporting
     });
 
     child.on("error", (err) => {
@@ -102,6 +128,13 @@ class ProcessManager {
     child.on("close", (code) => {
       if (code !== 0) {
         entry.status = "error";
+        // If process failed and we have stderr, report it as an error
+        if (entry.stderrBuffer.length > 0) {
+          const stderrText = entry.stderrBuffer.join("").trim();
+          if (stderrText) {
+            onError(new Error(summarizeStderr(stderrText)));
+          }
+        }
       } else {
         // Mark session as used so follow-ups use --resume
         this.usedSessions.add(sessionId);

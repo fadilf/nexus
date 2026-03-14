@@ -5,6 +5,14 @@ export type StreamEvent =
   | { type: "done"; status: "complete" | "error" }
   | { type: "error"; message: string };
 
+// Lines matching these patterns are CLI diagnostic output, not content
+const IGNORED_LINE_PATTERNS = [
+  /^Loaded cached credentials/i,
+  /^Retrying with backoff/i,
+  /^Attempt \d+ failed/i,
+  /^Warning:/i,
+];
+
 export function createStreamParser(model: AgentModel): (chunk: string) => StreamEvent[] {
   let buffer = "";
 
@@ -20,15 +28,26 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
 
       try {
         const json = JSON.parse(trimmed);
+
+        // Handle error result events from both CLIs
+        if (json.type === "result" && json.status === "error") {
+          const error = json.error as Record<string, unknown> | undefined;
+          const message = typeof error?.message === "string" ? error.message : "Process ended with an error";
+          events.push({ type: "error", message });
+          continue;
+        }
+
         const text = extractText(json, model);
         if (text) {
           events.push({ type: "content", text });
         }
       } catch {
-        // Not JSON — treat as raw text output
-        if (trimmed) {
+        // Not JSON — only treat as content for Claude (which may emit plain text)
+        // For Gemini, non-JSON lines are diagnostic noise (errors, warnings, etc.)
+        if (trimmed && model === "claude") {
           events.push({ type: "content", text: trimmed });
         }
+        // For Gemini, skip non-JSON lines entirely — they're stderr-like diagnostics
       }
     }
 
@@ -62,10 +81,15 @@ function extractText(json: Record<string, unknown>, model: AgentModel): string |
 
   // Gemini stream-json format
   if (model === "gemini") {
+    // Skip non-content messages (init, user message echo, metadata)
+    if (json.type === "init" || json.role === "user") {
+      return null;
+    }
     if (typeof json.text === "string") {
       return json.text;
     }
-    if (typeof json.content === "string") {
+    // Only use content field for model responses, not user echoes
+    if (typeof json.content === "string" && json.role !== "user") {
       return json.content;
     }
     // Nested parts

@@ -209,9 +209,12 @@ export default function ThreadList({
   };
 
   return (
-    <div className="flex h-full w-[35%] min-w-[280px] flex-col border-r border-zinc-200">
+    <div className="flex h-full w-full flex-col border-r border-zinc-200">
       <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
-        <h1 className="text-lg font-semibold text-zinc-900">Nexus</h1>
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Nexus" className="h-7 w-7" />
+          <h1 className="text-lg font-semibold text-zinc-900">Nexus</h1>
+        </div>
         <button
           onClick={onNewThread}
           className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800"

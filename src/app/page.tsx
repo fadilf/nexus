@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { ThreadListItem, ThreadWithMessages, ThreadProcess, Agent } from "@/lib/types";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { ThreadListItem, ThreadWithMessages, ThreadProcess, Agent, MessageImage } from "@/lib/types";
 import { useAgentStream } from "@/hooks/useSSE";
 import ThreadList from "@/components/ThreadList";
 import ThreadDetail from "@/components/ThreadDetail";
@@ -46,6 +46,48 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const prevIsStreaming = useRef(false);
 
+  // Resizable sidebar
+  const SIDEBAR_MIN = 240;
+  const SIDEBAR_MAX = 600;
+  const SIDEBAR_DEFAULT = 320;
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const isResizing = useRef(false);
+
+  useLayoutEffect(() => {
+    const saved = localStorage.getItem("nexus-sidebar-width");
+    if (saved) setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Number(saved))));
+  }, []);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + e.clientX - startX));
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, [sidebarWidth]);
+
+  // Persist sidebar width
+  useEffect(() => {
+    localStorage.setItem("nexus-sidebar-width", String(sidebarWidth));
+  }, [sidebarWidth]);
+
   const [config, , refetchConfig] = useFetch<{ agents: Agent[] }>("/api/config");
   const agents = config?.agents ?? [];
 
@@ -80,28 +122,33 @@ export default function Home() {
   }, [isStreaming, refetchThread, refetchThreads]);
 
   const handleSendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, images?: MessageImage[]) => {
       if (!selectedThreadId || !selectedThread) return;
 
       const res = await fetch(`/api/threads/${selectedThreadId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, ...(images && images.length > 0 ? { images } : {}) }),
       });
 
       if (!res.ok) return;
 
-      const { message, targetAgents } = await res.json();
+      const { message, targetAgents, threadUpdated } = await res.json();
 
       // Update local state immediately
       setSelectedThread((prev) =>
         prev ? { ...prev, messages: [...prev.messages, message] } : prev
       );
 
+      // Refetch thread to pick up newly added agents
+      if (threadUpdated) {
+        refetchThread();
+      }
+
       // Start streaming for target agents
-      sendMessage(content, targetAgents);
+      sendMessage(content, targetAgents, images);
     },
-    [selectedThreadId, selectedThread, sendMessage, setSelectedThread]
+    [selectedThreadId, selectedThread, sendMessage, setSelectedThread, refetchThread]
   );
 
   const handleRenameThread = useCallback(
@@ -146,15 +193,21 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-white text-zinc-900">
-      <ThreadList
-        threads={threadList}
-        selectedThreadId={selectedThreadId}
-        onSelectThread={setSelectedThreadId}
-        onNewThread={() => setShowNewThread(true)}
-        onOpenSettings={() => setShowSettings(true)}
-        onArchiveThread={handleArchiveThread}
-        statuses={statuses}
-      />
+      <div className="relative flex-shrink-0" style={{ width: sidebarWidth }}>
+        <ThreadList
+          threads={threadList}
+          selectedThreadId={selectedThreadId}
+          onSelectThread={setSelectedThreadId}
+          onNewThread={() => setShowNewThread(true)}
+          onOpenSettings={() => setShowSettings(true)}
+          onArchiveThread={handleArchiveThread}
+          statuses={statuses}
+        />
+        <div
+          onMouseDown={startResize}
+          className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-violet-400/40 active:bg-violet-400/60 transition-colors"
+        />
+      </div>
       <ThreadDetail
         thread={selectedThread}
         streamingMessages={streamingMessages}
@@ -162,6 +215,7 @@ export default function Home() {
         onStop={stopAgent}
         onRenameThread={handleRenameThread}
         isStreaming={isStreaming}
+        allAgents={agents}
       />
       <NewThreadDialog
         open={showNewThread}

@@ -10,5 +10,6 @@
 ## Medium-term
 - [ ] File attachment support (send files/images as context to agents)
 - [ ] Orchestrator agent — a top-layer agent that coordinates between other agents in a thread
+- [ ] Git worktree support — allow agents to work in isolated worktrees to avoid conflicts with the main working directory
 
 ## Long-term

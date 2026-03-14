@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ThreadWithMessages, Agent, Message } from "@/lib/types";
+import { ThreadWithMessages, Agent, Message, MessageImage } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import ModelIcon from "./ModelIcon";
 import MessageInput from "./MessageInput";
@@ -18,13 +18,15 @@ export default function ThreadDetail({
   onStop,
   onRenameThread,
   isStreaming,
+  allAgents,
 }: {
   thread: ThreadWithMessages | null;
   streamingMessages: Map<string, { agentId: string; content: string }>;
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, images?: MessageImage[]) => void;
   onStop: (agentId: string) => void;
   onRenameThread?: (title: string) => void;
   isStreaming: boolean;
+  allAgents?: Agent[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -133,6 +135,7 @@ export default function ThreadDetail({
       </div>
       <MessageInput
         agents={thread.agents}
+        allAgents={allAgents}
         onSendMessage={onSendMessage}
         onStop={onStop}
         disabled={isStreaming}

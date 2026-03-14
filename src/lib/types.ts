@@ -23,6 +23,12 @@ export type Thread = {
   archived?: boolean;
 };
 
+export type MessageImage = {
+  id: string;
+  filename: string;
+  ext: string;
+};
+
 export type Message = {
   id: string;
   threadId: string;
@@ -31,6 +37,7 @@ export type Message = {
   content: string;
   timestamp: string;
   status: "streaming" | "complete" | "error";
+  images?: MessageImage[];
 };
 
 export type ThreadWithMessages = Thread & { messages: Message[] };

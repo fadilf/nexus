@@ -74,6 +74,24 @@ export default function MessageBubble({
             )}
           </span>
         )}
+        {isOwn && message.images && message.images.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap justify-end gap-1.5">
+            {message.images.map((img) => (
+              <a
+                key={img.id}
+                href={`/api/uploads/${img.filename}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src={`/api/uploads/${img.filename}`}
+                  alt={img.filename}
+                  className="max-h-48 max-w-64 rounded-lg border border-white/20 object-cover"
+                />
+              </a>
+            ))}
+          </div>
+        )}
         <div
           className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
             isOwn

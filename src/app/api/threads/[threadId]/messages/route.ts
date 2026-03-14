@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getThread, addMessage } from "@/lib/thread-store";
+import { getThread, addMessage, addAgentsToThread } from "@/lib/thread-store";
+import { loadAgents } from "@/lib/agent-store";
 import { parseMentions } from "@/lib/mentions";
 
 export async function POST(
@@ -12,23 +13,34 @@ export async function POST(
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  const { content } = (await request.json()) as { content: string };
-  if (!content?.trim()) {
-    return NextResponse.json({ error: "content required" }, { status: 400 });
+  const { content, images } = (await request.json()) as { content: string; images?: import("@/lib/types").MessageImage[] };
+  if (!content?.trim() && (!images || images.length === 0)) {
+    return NextResponse.json({ error: "content or images required" }, { status: 400 });
   }
 
   const message = await addMessage(threadId, {
     role: "user",
-    content,
+    content: content || "",
     timestamp: new Date().toISOString(),
     status: "complete",
+    ...(images && images.length > 0 ? { images } : {}),
   });
 
-  // Parse @mentions to determine which agents to target
-  const mentionedAgents = parseMentions(content, thread.agents);
+  // Parse @mentions against all available agents
+  const allAgents = await loadAgents();
+  const mentionedAgents = parseMentions(content, allAgents);
   const targetAgents = mentionedAgents.length > 0
     ? mentionedAgents
     : [thread.agents[0]]; // Default to first agent
 
-  return NextResponse.json({ message, targetAgents });
+  // Add any mentioned agents not already in the thread
+  const threadAgentIds = new Set(thread.agents.map((a) => a.id));
+  const newAgents = targetAgents.filter((a) => !threadAgentIds.has(a.id));
+  let threadUpdated = false;
+  if (newAgents.length > 0) {
+    await addAgentsToThread(threadId, newAgents);
+    threadUpdated = true;
+  }
+
+  return NextResponse.json({ message, targetAgents, threadUpdated });
 }

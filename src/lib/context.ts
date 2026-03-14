@@ -39,11 +39,12 @@ export function buildContextualPrompt(
   const agentMap = new Map(agents.map((a) => [a.id, a.name]));
 
   const lines = missed.map((m) => {
+    const imageNote = m.images && m.images.length > 0 ? ` [with ${m.images.length} image(s)]` : "";
     if (m.role === "user") {
-      return `User: ${m.content}`;
+      return `User: ${m.content}${imageNote}`;
     }
     const name = (m.agentId && agentMap.get(m.agentId)) || "Agent";
-    return `${name} (agent): ${m.content}`;
+    return `${name} (agent): ${m.content}${imageNote}`;
   });
 
   return (

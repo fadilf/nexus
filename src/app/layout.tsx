@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Nexus",
   description: "Thread-based messaging client",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
