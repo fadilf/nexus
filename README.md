@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.png" alt="Nexus" width="128" />
+</p>
+
 # Nexus
 
 A multi-agent coding tool with a unified chat UI. Nexus spawns CLI subprocesses (Claude CLI, Gemini CLI) against a local project directory, letting you run real-time streaming conversations with multiple AI agents side by side.
