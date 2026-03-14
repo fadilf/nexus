@@ -8,31 +8,66 @@ type StreamingMessage = {
   content: string;
 };
 
-export function useAgentStream(threadId: string | null) {
-  const [streamingMessages, setStreamingMessages] = useState<Map<string, StreamingMessage>>(new Map());
-  const [error, setError] = useState<string | null>(null);
+export function useAgentStream(
+  threadId: string | null,
+  onStreamComplete?: (threadId: string) => void,
+  workspaceId?: string | null
+) {
+  // Store streams for ALL threads in a ref so they persist across threadId changes
+  const allStreams = useRef<Map<string, Map<string, StreamingMessage>>>(
+    new Map()
+  );
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
+  const [, setRenderTick] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const onCompleteRef = useRef(onStreamComplete);
+  onCompleteRef.current = onStreamComplete;
+  const workspaceIdRef = useRef(workspaceId);
+  workspaceIdRef.current = workspaceId;
 
+  const triggerRender = useCallback(() => setRenderTick((t) => t + 1), []);
+
+  const wsParam = useCallback(() => {
+    const id = workspaceIdRef.current;
+    return id ? `?workspaceId=${id}` : "";
+  }, []);
+
+  // Expose only the current thread's streaming messages (stable empty ref to avoid re-renders)
+  const emptyMap = useRef(new Map<string, StreamingMessage>()).current;
+  const streamingMessages = threadId
+    ? allStreams.current.get(threadId) ?? emptyMap
+    : emptyMap;
   const isStreaming = streamingMessages.size > 0;
 
   const streamAgent = useCallback(
-    async (agentId: string, prompt: string, images?: MessageImage[]) => {
-      if (!threadId) return;
-
+    async (
+      targetThreadId: string,
+      agentId: string,
+      prompt: string,
+      images?: MessageImage[]
+    ) => {
+      const controllerKey = `${targetThreadId}:${agentId}`;
       const controller = new AbortController();
-      abortControllers.current.set(agentId, controller);
+      abortControllers.current.set(controllerKey, controller);
 
-      setStreamingMessages((prev) => {
-        const next = new Map(prev);
-        next.set(agentId, { agentId, content: "" });
-        return next;
-      });
+      // Initialize streaming entry for this thread
+      if (!allStreams.current.has(targetThreadId)) {
+        allStreams.current.set(targetThreadId, new Map());
+      }
+      allStreams.current
+        .get(targetThreadId)!
+        .set(agentId, { agentId, content: "" });
+      triggerRender();
 
       try {
-        const res = await fetch(`/api/threads/${threadId}/stream`, {
+        const res = await fetch(`/api/threads/${targetThreadId}/stream${wsParam()}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentId, prompt, ...(images && images.length > 0 ? { images } : {}) }),
+          body: JSON.stringify({
+            agentId,
+            prompt,
+            ...(images && images.length > 0 ? { images } : {}),
+          }),
           signal: controller.signal,
         });
 
@@ -59,15 +94,15 @@ export function useAgentStream(threadId: string | null) {
             try {
               const event = JSON.parse(data);
               if (event.type === "content") {
-                setStreamingMessages((prev) => {
-                  const next = new Map(prev);
-                  const existing = next.get(agentId);
-                  next.set(agentId, {
+                const threadStreams = allStreams.current.get(targetThreadId);
+                if (threadStreams) {
+                  const existing = threadStreams.get(agentId);
+                  threadStreams.set(agentId, {
                     agentId,
                     content: (existing?.content ?? "") + event.text,
                   });
-                  return next;
-                });
+                  triggerRender();
+                }
               } else if (event.type === "done") {
                 break;
               } else if (event.type === "error") {
@@ -83,25 +118,32 @@ export function useAgentStream(threadId: string | null) {
           setError((err as Error).message);
         }
       } finally {
-        abortControllers.current.delete(agentId);
-        setStreamingMessages((prev) => {
-          const next = new Map(prev);
-          next.delete(agentId);
-          return next;
-        });
+        abortControllers.current.delete(controllerKey);
+        const threadStreams = allStreams.current.get(targetThreadId);
+        if (threadStreams) {
+          threadStreams.delete(agentId);
+          if (threadStreams.size === 0) {
+            allStreams.current.delete(targetThreadId);
+            // All agents for this thread are done
+            onCompleteRef.current?.(targetThreadId);
+          }
+        }
+        triggerRender();
       }
     },
-    [threadId]
+    [triggerRender, wsParam]
   );
 
   const sendMessage = useCallback(
     async (content: string, targetAgents: Agent[], images?: MessageImage[]) => {
       if (!threadId) return;
+      const currentThreadId = threadId;
       setError(null);
 
-      // Start streams for all target agents in parallel
       await Promise.all(
-        targetAgents.map((agent) => streamAgent(agent.id, content, images))
+        targetAgents.map((agent) =>
+          streamAgent(currentThreadId, agent.id, content, images)
+        )
       );
     },
     [threadId, streamAgent]
@@ -110,16 +152,15 @@ export function useAgentStream(threadId: string | null) {
   const stopAgent = useCallback(
     async (agentId: string) => {
       if (!threadId) return;
-      // Abort the fetch
-      abortControllers.current.get(agentId)?.abort();
-      // Tell server to kill the process
-      await fetch(`/api/threads/${threadId}/stop`, {
+      const controllerKey = `${threadId}:${agentId}`;
+      abortControllers.current.get(controllerKey)?.abort();
+      await fetch(`/api/threads/${threadId}/stop${wsParam()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agentId }),
       });
     },
-    [threadId]
+    [threadId, wsParam]
   );
 
   return {

@@ -1,7 +1,10 @@
+"use client";
+
 import { AgentModel, AgentIcon, Message } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useWsParam } from "@/contexts/WorkspaceContext";
 
 function formatTime(timestamp: string) {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -44,6 +47,7 @@ export default function MessageBubble({
   model?: AgentModel;
   icon?: AgentIcon;
 }) {
+  const wsParam = useWsParam();
   const avatar = (
     <div
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -79,12 +83,12 @@ export default function MessageBubble({
             {message.images.map((img) => (
               <a
                 key={img.id}
-                href={`/api/uploads/${img.filename}`}
+                href={`/api/uploads/${img.filename}${wsParam}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <img
-                  src={`/api/uploads/${img.filename}`}
+                  src={`/api/uploads/${img.filename}${wsParam}`}
                   alt={img.filename}
                   className="max-h-48 max-w-64 rounded-lg border border-white/20 object-cover"
                 />

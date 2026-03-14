@@ -9,11 +9,13 @@ export default function NewThreadDialog({
   agents,
   onClose,
   onCreated,
+  workspaceId,
 }: {
   open: boolean;
   agents: Agent[];
   onClose: () => void;
   onCreated: (thread: ThreadWithMessages) => void;
+  workspaceId?: string | null;
 }) {
   const [title, setTitle] = useState("");
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([agents[0]?.id].filter(Boolean));
@@ -31,7 +33,7 @@ export default function NewThreadDialog({
     if (!title.trim() || !selectedAgentIds.length) return;
     setCreating(true);
     try {
-      const res = await fetch("/api/threads", {
+      const res = await fetch(`/api/threads${workspaceId ? `?workspaceId=${workspaceId}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: title.trim(), agentIds: selectedAgentIds }),

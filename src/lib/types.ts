@@ -53,3 +53,11 @@ export type ThreadListItem = Thread & {
   lastMessagePreview: string;
   messageCount: number;
 };
+
+export type Workspace = {
+  id: string;
+  name: string;
+  directory: string;
+  color: string;
+  addedAt: string;
+};

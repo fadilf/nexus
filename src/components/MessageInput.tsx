@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Paperclip, X } from "lucide-react";
 import { Agent, MessageImage } from "@/lib/types";
+import { useWsParam } from "@/contexts/WorkspaceContext";
 
 type PendingImage = {
   file: File;
@@ -22,6 +23,7 @@ export default function MessageInput({
   onStop?: (agentId: string) => void;
   disabled?: boolean;
 }) {
+  const wsParam = useWsParam();
   const [content, setContent] = useState("");
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
@@ -64,7 +66,7 @@ export default function MessageInput({
     for (const img of images) {
       formData.append("files", img.file);
     }
-    const res = await fetch("/api/uploads", { method: "POST", body: formData });
+    const res = await fetch(`/api/uploads${wsParam}`, { method: "POST", body: formData });
     if (!res.ok) throw new Error("Upload failed");
     return res.json();
   };

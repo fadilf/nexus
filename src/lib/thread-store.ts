@@ -7,12 +7,12 @@ function getWorkingDirectory(): string {
   return process.env.NEXUS_PROJECT_DIR || process.cwd();
 }
 
-function getThreadsDir(): string {
-  return path.join(getWorkingDirectory(), NEXUS_DIR, THREADS_DIR);
+function getThreadsDir(workspaceDir: string): string {
+  return path.join(workspaceDir, NEXUS_DIR, THREADS_DIR);
 }
 
-function getThreadPath(threadId: string): string {
-  return path.join(getThreadsDir(), `${threadId}.json`);
+function getThreadPath(workspaceDir: string, threadId: string): string {
+  return path.join(getThreadsDir(workspaceDir), `${threadId}.json`);
 }
 
 // Per-thread write lock to serialize file writes
@@ -25,13 +25,13 @@ function withLock<T>(threadId: string, fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export async function ensureNexusDir(): Promise<void> {
-  await mkdir(getThreadsDir(), { recursive: true });
+export async function ensureNexusDir(workspaceDir: string): Promise<void> {
+  await mkdir(getThreadsDir(workspaceDir), { recursive: true });
 }
 
-export async function listThreads(): Promise<ThreadListItem[]> {
-  await ensureNexusDir();
-  const dir = getThreadsDir();
+export async function listThreads(workspaceDir: string): Promise<ThreadListItem[]> {
+  await ensureNexusDir(workspaceDir);
+  const dir = getThreadsDir(workspaceDir);
   let files: string[];
   try {
     files = await readdir(dir);
@@ -66,9 +66,9 @@ export async function listThreads(): Promise<ThreadListItem[]> {
   return items;
 }
 
-export async function getThread(id: string): Promise<ThreadWithMessages | null> {
+export async function getThread(workspaceDir: string, id: string): Promise<ThreadWithMessages | null> {
   try {
-    const raw = await readFile(getThreadPath(id), "utf-8");
+    const raw = await readFile(getThreadPath(workspaceDir, id), "utf-8");
     const data = JSON.parse(raw) as ThreadWithMessages;
     // Recovery: mark any streaming messages as error
     let modified = false;
@@ -80,7 +80,7 @@ export async function getThread(id: string): Promise<ThreadWithMessages | null> 
       }
     }
     if (modified) {
-      await writeFile(getThreadPath(id), JSON.stringify(data, null, 2));
+      await writeFile(getThreadPath(workspaceDir, id), JSON.stringify(data, null, 2));
     }
     return data;
   } catch {
@@ -88,8 +88,8 @@ export async function getThread(id: string): Promise<ThreadWithMessages | null> 
   }
 }
 
-export async function createThread(title: string, agents: Thread["agents"]): Promise<ThreadWithMessages> {
-  await ensureNexusDir();
+export async function createThread(workspaceDir: string, title: string, agents: Thread["agents"]): Promise<ThreadWithMessages> {
+  await ensureNexusDir(workspaceDir);
   const now = new Date().toISOString();
   const thread: ThreadWithMessages = {
     id: generateId(),
@@ -99,13 +99,13 @@ export async function createThread(title: string, agents: Thread["agents"]): Pro
     updatedAt: now,
     messages: [],
   };
-  await writeFile(getThreadPath(thread.id), JSON.stringify(thread, null, 2));
+  await writeFile(getThreadPath(workspaceDir, thread.id), JSON.stringify(thread, null, 2));
   return thread;
 }
 
-export async function addMessage(threadId: string, message: Omit<Message, "id" | "threadId">): Promise<Message> {
+export async function addMessage(workspaceDir: string, threadId: string, message: Omit<Message, "id" | "threadId">): Promise<Message> {
   return withLock(threadId, async () => {
-    const thread = await getThread(threadId);
+    const thread = await getThread(workspaceDir, threadId);
     if (!thread) throw new Error(`Thread ${threadId} not found`);
 
     const msg: Message = {
@@ -115,53 +115,54 @@ export async function addMessage(threadId: string, message: Omit<Message, "id" |
     };
     thread.messages.push(msg);
     thread.updatedAt = new Date().toISOString();
-    await writeFile(getThreadPath(threadId), JSON.stringify(thread, null, 2));
+    await writeFile(getThreadPath(workspaceDir, threadId), JSON.stringify(thread, null, 2));
     return msg;
   });
 }
 
 export async function updateMessage(
+  workspaceDir: string,
   threadId: string,
   messageId: string,
   updates: Partial<Pick<Message, "content" | "status">>
 ): Promise<void> {
   return withLock(threadId, async () => {
-    const raw = await readFile(getThreadPath(threadId), "utf-8");
+    const raw = await readFile(getThreadPath(workspaceDir, threadId), "utf-8");
     const thread = JSON.parse(raw) as ThreadWithMessages;
     const msg = thread.messages.find((m) => m.id === messageId);
     if (!msg) return;
     if (updates.content !== undefined) msg.content = updates.content;
     if (updates.status !== undefined) msg.status = updates.status;
     thread.updatedAt = new Date().toISOString();
-    await writeFile(getThreadPath(threadId), JSON.stringify(thread, null, 2));
+    await writeFile(getThreadPath(workspaceDir, threadId), JSON.stringify(thread, null, 2));
   });
 }
 
-export async function updateThreadTitle(threadId: string, title: string): Promise<ThreadWithMessages | null> {
+export async function updateThreadTitle(workspaceDir: string, threadId: string, title: string): Promise<ThreadWithMessages | null> {
   return withLock(threadId, async () => {
-    const thread = await getThread(threadId);
+    const thread = await getThread(workspaceDir, threadId);
     if (!thread) return null;
     thread.title = title;
     thread.updatedAt = new Date().toISOString();
-    await writeFile(getThreadPath(threadId), JSON.stringify(thread, null, 2));
+    await writeFile(getThreadPath(workspaceDir, threadId), JSON.stringify(thread, null, 2));
     return thread;
   });
 }
 
-export async function archiveThread(threadId: string, archived: boolean): Promise<ThreadWithMessages | null> {
+export async function archiveThread(workspaceDir: string, threadId: string, archived: boolean): Promise<ThreadWithMessages | null> {
   return withLock(threadId, async () => {
-    const thread = await getThread(threadId);
+    const thread = await getThread(workspaceDir, threadId);
     if (!thread) return null;
     thread.archived = archived;
     thread.updatedAt = new Date().toISOString();
-    await writeFile(getThreadPath(threadId), JSON.stringify(thread, null, 2));
+    await writeFile(getThreadPath(workspaceDir, threadId), JSON.stringify(thread, null, 2));
     return thread;
   });
 }
 
-export async function addAgentsToThread(threadId: string, newAgents: Agent[]): Promise<ThreadWithMessages | null> {
+export async function addAgentsToThread(workspaceDir: string, threadId: string, newAgents: Agent[]): Promise<ThreadWithMessages | null> {
   return withLock(threadId, async () => {
-    const thread = await getThread(threadId);
+    const thread = await getThread(workspaceDir, threadId);
     if (!thread) return null;
 
     const existingIds = new Set(thread.agents.map((a) => a.id));
@@ -170,14 +171,14 @@ export async function addAgentsToThread(threadId: string, newAgents: Agent[]): P
 
     thread.agents.push(...toAdd);
     thread.updatedAt = new Date().toISOString();
-    await writeFile(getThreadPath(threadId), JSON.stringify(thread, null, 2));
+    await writeFile(getThreadPath(workspaceDir, threadId), JSON.stringify(thread, null, 2));
     return thread;
   });
 }
 
-export async function deleteThread(threadId: string): Promise<void> {
+export async function deleteThread(workspaceDir: string, threadId: string): Promise<void> {
   try {
-    await unlink(getThreadPath(threadId));
+    await unlink(getThreadPath(workspaceDir, threadId));
   } catch {
     // Already gone
   }

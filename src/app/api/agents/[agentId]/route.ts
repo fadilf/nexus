@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { updateAgent, deleteAgent } from "@/lib/agent-store";
+import { resolveWorkspaceDir } from "@/lib/workspace-context";
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ agentId: string }> }
 ) {
+  const workspaceDir = await resolveWorkspaceDir(request);
   const { agentId } = await params;
   const updates = await request.json();
 
   try {
-    const agent = await updateAgent(agentId, updates);
+    const agent = await updateAgent(workspaceDir, agentId, updates);
     return NextResponse.json(agent);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
@@ -17,13 +19,14 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ agentId: string }> }
 ) {
+  const workspaceDir = await resolveWorkspaceDir(request);
   const { agentId } = await params;
 
   try {
-    await deleteAgent(agentId);
+    await deleteAgent(workspaceDir, agentId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });

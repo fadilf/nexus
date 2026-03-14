@@ -4,12 +4,8 @@ import crypto from "crypto";
 import { NEXUS_DIR, DEFAULT_AGENTS, DEFAULT_AGENT_IDS } from "./config";
 import { Agent } from "./types";
 
-function getWorkingDirectory(): string {
-  return process.env.NEXUS_PROJECT_DIR || process.cwd();
-}
-
-function getConfigPath(): string {
-  return path.join(getWorkingDirectory(), NEXUS_DIR, "config.json");
+function getConfigPath(workspaceDir: string): string {
+  return path.join(workspaceDir, NEXUS_DIR, "config.json");
 }
 
 // Write lock to serialize file writes
@@ -22,24 +18,24 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export async function loadAgents(): Promise<Agent[]> {
+export async function loadAgents(workspaceDir: string): Promise<Agent[]> {
   try {
-    const raw = await readFile(getConfigPath(), "utf-8");
+    const raw = await readFile(getConfigPath(workspaceDir), "utf-8");
     const config = JSON.parse(raw) as { agents: Agent[] };
     return config.agents;
   } catch {
     // Seed from defaults
     const agents = DEFAULT_AGENTS.map((a) => ({ ...a, isDefault: true }));
-    await saveAgents(agents);
+    await saveAgents(workspaceDir, agents);
     return agents;
   }
 }
 
-export async function saveAgents(agents: Agent[]): Promise<void> {
+export async function saveAgents(workspaceDir: string, agents: Agent[]): Promise<void> {
   return withLock(async () => {
-    const dir = path.join(getWorkingDirectory(), NEXUS_DIR);
+    const dir = path.join(workspaceDir, NEXUS_DIR);
     await mkdir(dir, { recursive: true });
-    await writeFile(getConfigPath(), JSON.stringify({ agents }, null, 2));
+    await writeFile(getConfigPath(workspaceDir), JSON.stringify({ agents }, null, 2));
   });
 }
 
@@ -49,7 +45,7 @@ function validateAgentName(name: string): void {
   }
 }
 
-export async function createAgent(data: {
+export async function createAgent(workspaceDir: string, data: {
   name: string;
   model: Agent["model"];
   avatarColor: string;
@@ -57,7 +53,7 @@ export async function createAgent(data: {
   personality?: string;
 }): Promise<Agent> {
   validateAgentName(data.name);
-  const agents = await loadAgents();
+  const agents = await loadAgents(workspaceDir);
 
   if (agents.some((a) => a.name.toLowerCase() === data.name.toLowerCase())) {
     throw new Error(`Agent name "${data.name}" is already taken`);
@@ -74,12 +70,12 @@ export async function createAgent(data: {
   };
 
   agents.push(agent);
-  await saveAgents(agents);
+  await saveAgents(workspaceDir, agents);
   return agent;
 }
 
-export async function updateAgent(id: string, updates: Partial<Omit<Agent, "id" | "isDefault">>): Promise<Agent> {
-  const agents = await loadAgents();
+export async function updateAgent(workspaceDir: string, id: string, updates: Partial<Omit<Agent, "id" | "isDefault">>): Promise<Agent> {
+  const agents = await loadAgents(workspaceDir);
   const idx = agents.findIndex((a) => a.id === id);
   if (idx === -1) throw new Error("Agent not found");
 
@@ -93,24 +89,24 @@ export async function updateAgent(id: string, updates: Partial<Omit<Agent, "id" 
   }
 
   agents[idx] = { ...agents[idx], ...updates };
-  await saveAgents(agents);
+  await saveAgents(workspaceDir, agents);
   return agents[idx];
 }
 
-export async function deleteAgent(id: string): Promise<void> {
+export async function deleteAgent(workspaceDir: string, id: string): Promise<void> {
   if (DEFAULT_AGENT_IDS.includes(id)) {
     throw new Error("Cannot delete default agents");
   }
 
-  const agents = await loadAgents();
+  const agents = await loadAgents(workspaceDir);
   const filtered = agents.filter((a) => a.id !== id);
   if (filtered.length === agents.length) {
     throw new Error("Agent not found");
   }
-  await saveAgents(filtered);
+  await saveAgents(workspaceDir, filtered);
 }
 
-export async function getAgent(id: string): Promise<Agent | null> {
-  const agents = await loadAgents();
+export async function getAgent(workspaceDir: string, id: string): Promise<Agent | null> {
+  const agents = await loadAgents(workspaceDir);
   return agents.find((a) => a.id === id) ?? null;
 }

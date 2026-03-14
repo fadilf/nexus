@@ -3,18 +3,19 @@ import { getThread, addMessage, updateMessage } from "@/lib/thread-store";
 import { getProcessManager } from "@/lib/process-manager";
 import { createStreamParser } from "@/lib/stream-parser";
 import { AgentModel, MessageImage } from "@/lib/types";
-import { getWorkingDirectory } from "@/lib/thread-store";
 import { loadAgents } from "@/lib/agent-store";
 import { buildContextualPrompt } from "@/lib/context";
 import path from "path";
 import { getUploadsDir } from "@/lib/config";
+import { resolveWorkspaceDir } from "@/lib/workspace-context";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ threadId: string }> }
 ) {
+  const workspaceDir = await resolveWorkspaceDir(request);
   const { threadId } = await params;
-  const thread = await getThread(threadId);
+  const thread = await getThread(workspaceDir, threadId);
   if (!thread) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
@@ -22,10 +23,10 @@ export async function POST(
   const { agentId, prompt, images } = (await request.json()) as { agentId: string; prompt: string; images?: MessageImage[] };
 
   // Resolve image paths
-  const imagePaths = images?.map((img) => path.join(getUploadsDir(), img.filename)) ?? [];
+  const imagePaths = images?.map((img) => path.join(getUploadsDir(workspaceDir), img.filename)) ?? [];
 
   // Resolve fresh agent data from store (picks up personality edits)
-  const allAgents = await loadAgents();
+  const allAgents = await loadAgents(workspaceDir);
   const freshAgent = allAgents.find((a) => a.id === agentId);
   // Fall back to thread-stored agent data if agent was deleted
   const agent = freshAgent ?? thread.agents.find((a) => a.id === agentId);
@@ -88,7 +89,7 @@ export async function POST(
   }
 
   // Create assistant message placeholder
-  const assistantMsg = await addMessage(threadId, {
+  const assistantMsg = await addMessage(workspaceDir, threadId, {
     role: "assistant",
     agentId: agent.id,
     content: "",
@@ -110,7 +111,7 @@ export async function POST(
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
-      const cwd = getWorkingDirectory();
+      const cwd = workspaceDir;
 
       try {
         pm.spawn(
@@ -145,13 +146,13 @@ export async function POST(
             // Periodic persist every 5s
             if (Date.now() - lastPersist > 5000) {
               lastPersist = Date.now();
-              updateMessage(threadId, assistantMsg.id, { content: accumulatedContent }).catch(() => {});
+              updateMessage(workspaceDir, threadId, assistantMsg.id, { content: accumulatedContent }).catch(() => {});
             }
           },
           // onClose
           (code) => {
             const status = code === 0 ? "complete" : "error";
-            updateMessage(threadId, assistantMsg.id, {
+            updateMessage(workspaceDir, threadId, assistantMsg.id, {
               content: accumulatedContent || (status === "error" ? `[Process exited with code ${code}]` : ""),
               status,
             }).catch(() => {});
@@ -168,7 +169,7 @@ export async function POST(
             const errorContent = accumulatedContent
               ? `${accumulatedContent}\n\n[Error: ${err.message}]`
               : `[Error: ${err.message}]`;
-            updateMessage(threadId, assistantMsg.id, {
+            updateMessage(workspaceDir, threadId, assistantMsg.id, {
               content: errorContent,
               status: "error",
             }).catch(() => {});
@@ -186,7 +187,7 @@ export async function POST(
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
-        updateMessage(threadId, assistantMsg.id, {
+        updateMessage(workspaceDir, threadId, assistantMsg.id, {
           content: `[Error: ${message}]`,
           status: "error",
         }).catch(() => {});

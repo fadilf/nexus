@@ -29,15 +29,33 @@ export default function ThreadDetail({
   allAgents?: Agent[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const threshold = 80;
+      isNearBottomRef.current =
+        el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    };
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Derive a primitive value from streamingMessages to avoid re-firing on reference changes
+  const streamingContentKey = Array.from(streamingMessages.values())
+    .map((s) => s.content.length)
+    .join(",");
+
+  useEffect(() => {
+    if (scrollRef.current && isNearBottomRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [thread?.messages.length, streamingMessages]);
+  }, [thread?.messages.length, streamingContentKey]);
 
   if (!thread) {
     return (
@@ -134,6 +152,7 @@ export default function ThreadDetail({
         })}
       </div>
       <MessageInput
+        key={thread.id}
         agents={thread.agents}
         allAgents={allAgents}
         onSendMessage={onSendMessage}

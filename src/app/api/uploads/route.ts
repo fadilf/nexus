@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { getUploadsDir } from "@/lib/config";
+import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import { MessageImage } from "@/lib/types";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
@@ -19,6 +20,7 @@ function extFromMime(mime: string): string {
 }
 
 export async function POST(request: Request) {
+  const workspaceDir = await resolveWorkspaceDir(request);
   const formData = await request.formData();
   const files = formData.getAll("files") as File[];
 
@@ -26,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
   }
 
-  const uploadsDir = getUploadsDir();
+  const uploadsDir = getUploadsDir(workspaceDir);
   await mkdir(uploadsDir, { recursive: true });
 
   const images: MessageImage[] = [];

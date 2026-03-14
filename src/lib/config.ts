@@ -5,8 +5,8 @@ export const NEXUS_DIR = ".nexus";
 export const THREADS_DIR = "threads";
 export const UPLOADS_DIR = "uploads";
 
-export function getUploadsDir(): string {
-  return path.join(process.cwd(), NEXUS_DIR, UPLOADS_DIR);
+export function getUploadsDir(workspaceDir?: string): string {
+  return path.join(workspaceDir || process.cwd(), NEXUS_DIR, UPLOADS_DIR);
 }
 
 export const DEFAULT_AGENT_IDS = ["claude", "gemini"];

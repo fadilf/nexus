@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
 import { getUploadsDir } from "@/lib/config";
+import { resolveWorkspaceDir } from "@/lib/workspace-context";
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -12,14 +13,15 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ imageId: string }> }
 ) {
+  const workspaceDir = await resolveWorkspaceDir(request);
   const { imageId } = await params;
 
   // Prevent path traversal
   const safe = path.basename(imageId);
-  const filePath = path.join(getUploadsDir(), safe);
+  const filePath = path.join(getUploadsDir(workspaceDir), safe);
   const ext = path.extname(safe).slice(1).toLowerCase();
   const contentType = MIME_TYPES[ext];
 

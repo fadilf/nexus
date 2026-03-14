@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { loadAgents } from "@/lib/agent-store";
-import { getWorkingDirectory } from "@/lib/thread-store";
+import { resolveWorkspaceDir } from "@/lib/workspace-context";
 
-export async function GET() {
-  const agents = await loadAgents();
+export async function GET(request: Request) {
+  const workspaceDir = await resolveWorkspaceDir(request);
+  const agents = await loadAgents(workspaceDir);
   return NextResponse.json({
-    workingDirectory: getWorkingDirectory(),
+    workingDirectory: workspaceDir,
     agents,
   });
 }

@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { ThreadListItem, ThreadWithMessages, ThreadProcess, Agent, MessageImage } from "@/lib/types";
+import { ThreadListItem, ThreadWithMessages, ThreadProcess, Agent, MessageImage, Workspace } from "@/lib/types";
 import { useAgentStream } from "@/hooks/useSSE";
 import ThreadList from "@/components/ThreadList";
 import ThreadDetail from "@/components/ThreadDetail";
 import NewThreadDialog from "@/components/NewThreadDialog";
 import SettingsDialog from "@/components/SettingsDialog";
+import WorkspaceBar from "@/components/WorkspaceBar";
+import AddWorkspaceDialog from "@/components/AddWorkspaceDialog";
+import { WorkspaceProvider } from "@/contexts/WorkspaceContext";
 
 function useFetch<T>(url: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -40,11 +43,16 @@ function useFetch<T>(url: string | null, deps: unknown[] = []) {
 }
 
 export default function Home() {
+  // Workspace state
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [showAddWorkspace, setShowAddWorkspace] = useState(false);
+
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<ThreadProcess[]>([]);
   const [showNewThread, setShowNewThread] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const prevIsStreaming = useRef(false);
+  const streamCompleteThreadId = useRef<string | null>(null);
 
   // Resizable sidebar
   const SIDEBAR_MIN = 240;
@@ -52,6 +60,37 @@ export default function Home() {
   const SIDEBAR_DEFAULT = 320;
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const isResizing = useRef(false);
+
+  // Helper to build workspace-aware API URLs
+  const wsUrl = useCallback(
+    (path: string) => {
+      if (!activeWorkspaceId) return path;
+      const separator = path.includes("?") ? "&" : "?";
+      return `${path}${separator}workspaceId=${activeWorkspaceId}`;
+    },
+    [activeWorkspaceId]
+  );
+
+  // Load workspaces on mount
+  useEffect(() => {
+    fetch("/api/workspaces")
+      .then((r) => r.json())
+      .then((ws: Workspace[]) => {
+        setWorkspaces(ws);
+        // Restore from localStorage or use first
+        const saved = localStorage.getItem("nexus-active-workspace");
+        const match = ws.find((w) => w.id === saved);
+        setActiveWorkspaceId(match ? match.id : ws[0]?.id ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Persist active workspace
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      localStorage.setItem("nexus-active-workspace", activeWorkspaceId);
+    }
+  }, [activeWorkspaceId]);
 
   useLayoutEffect(() => {
     const saved = localStorage.getItem("nexus-sidebar-width");
@@ -88,16 +127,45 @@ export default function Home() {
     localStorage.setItem("nexus-sidebar-width", String(sidebarWidth));
   }, [sidebarWidth]);
 
-  const [config, , refetchConfig] = useFetch<{ agents: Agent[] }>("/api/config");
+  const configUrl = activeWorkspaceId ? wsUrl("/api/config") : null;
+  const [config, , refetchConfig] = useFetch<{ agents: Agent[] }>(configUrl);
   const agents = config?.agents ?? [];
 
-  const [threads, , refetchThreads] = useFetch<ThreadListItem[]>("/api/threads");
+  const threadsUrl = activeWorkspaceId ? wsUrl("/api/threads") : null;
+  const [threads, , refetchThreads] = useFetch<ThreadListItem[]>(threadsUrl);
   const threadList = threads ?? [];
 
-  const threadUrl = selectedThreadId ? `/api/threads/${selectedThreadId}` : null;
+  const threadUrl = selectedThreadId ? wsUrl(`/api/threads/${selectedThreadId}`) : null;
   const [selectedThread, setSelectedThread, refetchThread] = useFetch<ThreadWithMessages>(threadUrl);
 
-  const { streamingMessages, isStreaming, sendMessage, stopAgent } = useAgentStream(selectedThreadId);
+  const handleStreamComplete = useCallback(
+    (completedThreadId: string) => {
+      streamCompleteThreadId.current = completedThreadId;
+      refetchThreads();
+      // If the completed thread is currently selected, also refetch its messages
+      if (completedThreadId === selectedThreadId) {
+        refetchThread();
+      }
+    },
+    [selectedThreadId, refetchThread, refetchThreads]
+  );
+
+  const { streamingMessages, isStreaming, sendMessage, stopAgent } = useAgentStream(
+    selectedThreadId,
+    handleStreamComplete,
+    activeWorkspaceId
+  );
+
+  // When switching to a thread that just completed streaming, refetch its data
+  useEffect(() => {
+    if (
+      streamCompleteThreadId.current &&
+      streamCompleteThreadId.current === selectedThreadId
+    ) {
+      streamCompleteThreadId.current = null;
+      refetchThread();
+    }
+  }, [selectedThreadId, refetchThread]);
 
   // Poll statuses
   useEffect(() => {
@@ -112,20 +180,47 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Refresh after streaming completes
-  useEffect(() => {
-    if (prevIsStreaming.current && !isStreaming) {
-      refetchThread();
-      refetchThreads();
-    }
-    prevIsStreaming.current = isStreaming;
-  }, [isStreaming, refetchThread, refetchThreads]);
+  // Switch workspace handler
+  const handleSelectWorkspace = useCallback((id: string) => {
+    if (id === activeWorkspaceId) return;
+    setActiveWorkspaceId(id);
+    setSelectedThreadId(null);
+  }, [activeWorkspaceId]);
+
+  const handleRemoveWorkspace = useCallback(
+    async (id: string) => {
+      await fetch(`/api/workspaces/${id}`, { method: "DELETE" });
+      setWorkspaces((prev) => {
+        const next = prev.filter((w) => w.id !== id);
+        if (activeWorkspaceId === id && next.length > 0) {
+          setActiveWorkspaceId(next[0].id);
+          setSelectedThreadId(null);
+        }
+        return next;
+      });
+    },
+    [activeWorkspaceId]
+  );
+
+  const handleEditWorkspace = useCallback(
+    async (id: string, updates: { name?: string; color?: string }) => {
+      const res = await fetch(`/api/workspaces/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) return;
+      const updated = await res.json();
+      setWorkspaces((prev) => prev.map((w) => (w.id === id ? updated : w)));
+    },
+    []
+  );
 
   const handleSendMessage = useCallback(
     async (content: string, images?: MessageImage[]) => {
       if (!selectedThreadId || !selectedThread) return;
 
-      const res = await fetch(`/api/threads/${selectedThreadId}/messages`, {
+      const res = await fetch(wsUrl(`/api/threads/${selectedThreadId}/messages`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, ...(images && images.length > 0 ? { images } : {}) }),
@@ -148,13 +243,13 @@ export default function Home() {
       // Start streaming for target agents
       sendMessage(content, targetAgents, images);
     },
-    [selectedThreadId, selectedThread, sendMessage, setSelectedThread, refetchThread]
+    [selectedThreadId, selectedThread, sendMessage, setSelectedThread, refetchThread, wsUrl]
   );
 
   const handleRenameThread = useCallback(
     async (title: string) => {
       if (!selectedThreadId) return;
-      const res = await fetch(`/api/threads/${selectedThreadId}`, {
+      const res = await fetch(wsUrl(`/api/threads/${selectedThreadId}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
@@ -164,12 +259,12 @@ export default function Home() {
       setSelectedThread((prev) => (prev ? { ...prev, title: updated.title } : prev));
       refetchThreads();
     },
-    [selectedThreadId, setSelectedThread, refetchThreads]
+    [selectedThreadId, setSelectedThread, refetchThreads, wsUrl]
   );
 
   const handleArchiveThread = useCallback(
     async (threadId: string, archived: boolean) => {
-      const res = await fetch(`/api/threads/${threadId}`, {
+      const res = await fetch(wsUrl(`/api/threads/${threadId}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ archived }),
@@ -180,7 +275,7 @@ export default function Home() {
         setSelectedThreadId(null);
       }
     },
-    [refetchThreads, selectedThreadId]
+    [refetchThreads, selectedThreadId, wsUrl]
   );
 
   const handleThreadCreated = useCallback(
@@ -192,7 +287,16 @@ export default function Home() {
   );
 
   return (
+    <WorkspaceProvider workspaceId={activeWorkspaceId}>
     <div className="flex h-screen bg-white text-zinc-900">
+      <WorkspaceBar
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelectWorkspace={handleSelectWorkspace}
+        onAddWorkspace={() => setShowAddWorkspace(true)}
+        onRemoveWorkspace={handleRemoveWorkspace}
+        onEditWorkspace={handleEditWorkspace}
+      />
       <div className="relative flex-shrink-0" style={{ width: sidebarWidth }}>
         <ThreadList
           threads={threadList}
@@ -222,6 +326,7 @@ export default function Home() {
         agents={agents}
         onClose={() => setShowNewThread(false)}
         onCreated={handleThreadCreated}
+        workspaceId={activeWorkspaceId}
       />
       <SettingsDialog
         open={showSettings}
@@ -229,7 +334,18 @@ export default function Home() {
           setShowSettings(false);
           refetchConfig();
         }}
+        workspaceId={activeWorkspaceId}
+      />
+      <AddWorkspaceDialog
+        open={showAddWorkspace}
+        onClose={() => setShowAddWorkspace(false)}
+        onAdded={(ws) => {
+          setWorkspaces((prev) => [...prev, ws]);
+          setActiveWorkspaceId(ws.id);
+          setSelectedThreadId(null);
+        }}
       />
     </div>
+    </WorkspaceProvider>
   );
 }
