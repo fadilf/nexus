@@ -182,6 +182,7 @@ export default function Home() {
     for (const msg of pendingStreams) {
       reattach(selectedThread.id, msg.agentId!);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedThread?.id, reattach]);
 
   // Clear unread indicators when opening a thread
