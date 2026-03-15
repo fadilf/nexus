@@ -309,7 +309,7 @@ export default function MessageInput({
               type="button"
               onClick={toggle}
               disabled={disabled}
-              className={`absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+              className={`absolute right-2 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
                 permissionDenied
                   ? "bg-red-500 text-white"
                   : isListening
