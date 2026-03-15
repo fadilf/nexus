@@ -16,6 +16,8 @@ Create custom agent profiles with distinct names, icons, colors, and personality
 - **Image attachments** — Send images to vision-capable agents
 - **Thread management** — Create, rename, archive, and organize conversations
 - **Real-time streaming** — SSE-based streaming with live response rendering
+- **Workspace management** — Add local project directories and switch between them
+- **Voice input** — Dictate messages using the Web Speech API
 
 ## Getting Started
 

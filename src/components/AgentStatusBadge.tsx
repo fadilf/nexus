@@ -4,7 +4,7 @@ export default function AgentStatusBadge({
   status: "idle" | "running" | "error";
 }) {
   const colors = {
-    idle: "bg-zinc-300",
+    idle: "bg-zinc-300 dark:bg-zinc-600",
     running: "bg-green-500",
     error: "bg-red-500",
   };

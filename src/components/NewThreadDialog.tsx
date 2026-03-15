@@ -52,17 +52,17 @@ export default function NewThreadDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl bg-white p-4 md:p-6 shadow-xl mx-4">
-        <h3 className="text-lg font-semibold text-zinc-900">New Thread</h3>
+      <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-4 md:p-6 shadow-xl mx-4">
+        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">New Thread</h3>
 
         <div className="mt-4">
-          <label className="text-sm font-medium text-zinc-700">Title</label>
+          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Title</label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="What are you working on?"
-            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            className="mt-1 w-full rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -74,7 +74,7 @@ export default function NewThreadDialog({
         </div>
 
         <div className="mt-4">
-          <label className="text-sm font-medium text-zinc-700">Agents</label>
+          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Agents</label>
           <div className="mt-2 flex flex-wrap gap-2">
             {agents.map((agent) => {
               const selected = selectedAgentIds.includes(agent.id);
@@ -84,12 +84,12 @@ export default function NewThreadDialog({
                   onClick={() => toggleAgent(agent.id)}
                   className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                     selected
-                      ? "bg-zinc-900 text-white"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                      ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                      : "bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600"
                   }`}
                 >
                   <span
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white dark:bg-zinc-800"
                     style={{
                       border: `1.5px solid ${agent.avatarColor}`,
                       boxShadow: `inset 0 1px 4px ${agent.avatarColor}80`,
@@ -107,14 +107,14 @@ export default function NewThreadDialog({
         <div className="mt-6 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
+            className="rounded-lg px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700"
           >
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={!title.trim() || !selectedAgentIds.length || creating}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
           >
             {creating ? "Creating..." : "Create"}
           </button>

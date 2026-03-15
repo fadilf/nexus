@@ -22,6 +22,7 @@ Nexus is a multi-agent coding tool that spawns CLI subprocesses (Claude CLI, Gem
 Browser → API Routes → ProcessManager (singleton) → CLI subprocesses (claude, gemini)
                       → ThreadStore → .nexus/threads/*.json
                       → AgentStore  → .nexus/config.json
+                      → WorkspaceStore → ~/.nexus/workspaces.json
 ```
 
 ### Key patterns
@@ -32,6 +33,8 @@ Browser → API Routes → ProcessManager (singleton) → CLI subprocesses (clau
 - **Agent personality:** Claude uses `--append-system-prompt`, Gemini prepends `[System Instructions]` to prompt
 - **SSE streaming** via POST fetch + ReadableStream reader (`useAgentStream` hook)
 - **@mentions** parsed to route messages to specific agents; falls back to first agent
+- **Workspaces** map to local project directories; resolved via `?workspaceId` query param, `NEXUS_PROJECT_DIR`, or `cwd()`
+- **Voice input** via Web Speech API (`useVoiceInput` hook) with interim text and auto-restart
 
 ### Design conventions
 
