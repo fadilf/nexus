@@ -21,11 +21,13 @@ export default function MessageGroup({
   agent,
   isUser,
   isStreaming,
+  displayName = "You",
 }: {
   group: MessageGroupData;
   agent?: Agent;
   isUser: boolean;
   isStreaming: boolean;
+  displayName?: string;
 }) {
   const firstMessage = group.messages[0];
 
@@ -39,19 +41,23 @@ export default function MessageGroup({
           style={
             isUser
               ? { backgroundColor: "#18181b" }
-              : { backgroundColor: agent?.avatarColor || "#71717a" }
+              : {
+                  backgroundColor: "white",
+                  border: `1.5px solid ${agent?.avatarColor || "#71717a"}`,
+                  boxShadow: `inset 0 2px 6px ${(agent?.avatarColor || "#71717a")}80`,
+                }
           }
         >
           {isUser ? (
-            <span className="text-xs font-semibold text-white">F</span>
+            <span className="text-xs font-semibold text-white">{displayName.charAt(0).toUpperCase()}</span>
           ) : agent ? (
             <ModelIcon
               model={agent.model}
               icon={agent.icon}
-              className="h-4 w-4 text-white"
+              className="h-4 w-4"
             />
           ) : (
-            <span className="text-xs font-semibold text-white">?</span>
+            <span className="text-xs font-semibold text-zinc-400">?</span>
           )}
         </div>
 
@@ -59,7 +65,7 @@ export default function MessageGroup({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className="text-sm font-bold text-zinc-900">
-              {isUser ? "Fadil" : agent?.name || "Unknown"}
+              {isUser ? displayName : agent?.name || "Unknown"}
             </span>
             {isStreaming && !isUser && (
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
