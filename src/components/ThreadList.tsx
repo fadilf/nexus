@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { ThreadListItem, ThreadProcess } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import AgentStatusBadge from "./AgentStatusBadge";
-import { Settings, Archive, ArchiveRestore, ChevronRight } from "lucide-react";
+import { Settings, Archive, ArchiveRestore, ChevronRight, MoreHorizontal } from "lucide-react";
 
 function formatDate(timestamp: string) {
   const date = new Date(timestamp);
@@ -66,23 +66,34 @@ function ThreadItem({
   thread,
   isSelected,
   statuses,
+  unreadByThread,
   onSelect,
   onContextMenu,
+  onOverflowMenu,
+  isMobile,
 }: {
   thread: ThreadListItem;
   isSelected: boolean;
   statuses: ThreadProcess[];
+  unreadByThread?: Record<string, string[]>;
   onSelect: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onOverflowMenu?: (e: React.MouseEvent) => void;
+  isMobile?: boolean;
 }) {
   const agents = thread.agents;
   const threadStatuses = statuses.filter((s) => s.threadId === thread.id);
   const hasRunning = threadStatuses.some((s) => s.status === "running");
   const hasError = threadStatuses.some((s) => s.status === "error");
+  const unreadAgents = unreadByThread?.[thread.id];
+  const hasUnread = unreadAgents && unreadAgents.length > 0;
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
       onContextMenu={onContextMenu}
       className={`flex w-full gap-3 px-5 py-3.5 text-left transition-colors hover:bg-zinc-100 ${
         isSelected ? "bg-zinc-100" : "cursor-pointer"
@@ -144,6 +155,12 @@ function ThreadItem({
             {thread.title}
           </span>
           <div className="flex shrink-0 items-center gap-1.5">
+            {hasRunning && (
+              <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+            )}
+            {!hasRunning && hasUnread && (
+              <span className="h-2 w-2 rounded-full bg-violet-500" />
+            )}
             {(hasRunning || hasError) && (
               <AgentStatusBadge status={hasRunning ? "running" : "error"} />
             )}
@@ -159,14 +176,27 @@ function ThreadItem({
           <span className="truncate text-xs text-zinc-500">
             {thread.lastMessagePreview}
           </span>
-          {thread.messageCount > 0 && (
-            <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500">
-              {thread.messageCount}
-            </span>
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {thread.messageCount > 0 && (
+              <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                {thread.messageCount}
+              </span>
+            )}
+            {isMobile && onOverflowMenu && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOverflowMenu(e);
+                }}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -178,6 +208,8 @@ export default function ThreadList({
   onOpenSettings,
   onArchiveThread,
   statuses,
+  unreadByThread,
+  isMobile,
 }: {
   threads: ThreadListItem[];
   selectedThreadId: string | null;
@@ -186,6 +218,8 @@ export default function ThreadList({
   onOpenSettings: () => void;
   onArchiveThread: (threadId: string, archived: boolean) => void;
   statuses: ThreadProcess[];
+  unreadByThread?: Record<string, string[]>;
+  isMobile?: boolean;
 }) {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -234,8 +268,11 @@ export default function ThreadList({
             thread={thread}
             isSelected={thread.id === selectedThreadId}
             statuses={statuses}
+            unreadByThread={unreadByThread}
             onSelect={() => onSelectThread(thread.id)}
             onContextMenu={(e) => handleContextMenu(e, thread)}
+            onOverflowMenu={(e) => handleContextMenu(e, thread)}
+            isMobile={isMobile}
           />
         ))}
         {archivedThreads.length > 0 && (
@@ -257,8 +294,11 @@ export default function ThreadList({
                   thread={thread}
                   isSelected={thread.id === selectedThreadId}
                   statuses={statuses}
+                  unreadByThread={unreadByThread}
                   onSelect={() => onSelectThread(thread.id)}
                   onContextMenu={(e) => handleContextMenu(e, thread)}
+                  onOverflowMenu={(e) => handleContextMenu(e, thread)}
+                  isMobile={isMobile}
                 />
               ))}
           </div>
