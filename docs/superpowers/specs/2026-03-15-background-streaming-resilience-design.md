@@ -18,21 +18,18 @@ When a user sends a message and navigates away (switches threads, reloads the pa
 
 ### Section 1: Server-Side Recovery Fix
 
-**Current bug:** `getThread()` in `thread-store.ts` marks any message with `status: "streaming"` as `"error"` on read. This is stale-process recovery logic, but it incorrectly marks messages for processes that are still alive.
+**Current bugs:**
+
+1. `getThread()` in `thread-store.ts` marks any message with `status: "streaming"` as `"error"` on read. This is stale-process recovery logic, but it incorrectly marks messages for processes that are still alive.
+2. `getThread()` is called by `addMessage()`, `updateThreadTitle()`, `archiveThread()`, and `addAgentsToThread()` — meaning any write to a thread corrupts concurrent streams by marking their in-progress messages as "error".
+3. `getThread()` writes back to the file without holding the per-thread write lock, creating a race condition with `updateMessage()` (which does use `withLock()`).
 
 **Changes:**
 
-- **`thread-store.ts` — `getThread()`:** Before marking a streaming message as `"error"`, check `ProcessManager.getProcess(threadId, agentId)` to see if the process is still running. If it is, leave `status: "streaming"`.
-- **New endpoint — `GET /api/threads/{threadId}/status`:** Lightweight endpoint that returns which agents are currently streaming for a thread. The client calls this on page load / thread switch to decide whether to re-attach.
-
-  Response shape:
-  ```json
-  {
-    "streaming": [
-      { "agentId": "agent-1", "messageId": "msg-123" }
-    ]
-  }
-  ```
+- **`thread-store.ts` — split `getThread()` into read-only and recovery paths:**
+  - `getThread()` becomes purely read-only — it reads from disk but does NOT mark or write back.
+  - New `recoverStaleStreams(threadId)` function (called only on app startup or explicit recovery) marks streaming messages as "error" after checking `ProcessManager.getProcess(threadId, agentId)`. If the process is alive, the status is left as `"streaming"`. This function uses `withLock()` to prevent race conditions.
+- **Existing `GET /api/threads/status` endpoint:** Already returns `pm.getAllStatuses()` and is polled by `page.tsx` every 2.5 seconds. Extend this to include `unreadAgents` per thread so the sidebar can derive both streaming and unread state without additional requests. No new per-thread status endpoint needed.
 
 ### Section 2: Client Re-attach on Page Load
 
@@ -40,26 +37,30 @@ When a user sends a message and navigates away (switches threads, reloads the pa
 
 1. Client fetches the thread (as it does today).
 2. If any messages have `status: "streaming"`, the client calls the existing `POST /api/threads/{threadId}/stream` endpoint for each streaming agent.
-3. The stream route detects the process is alive via `ProcessManager.getProcess()`, returns buffered output, and pipes new output (this already works).
-4. `useAgentStream` picks up the stream and renders the message as actively streaming.
+3. Re-attach request body: `{ agentId, prompt: "" }`. The stream route's existing re-attach code path short-circuits before using `prompt`, so an empty string is safe.
+4. The stream route detects the process is alive via `ProcessManager.getProcess()`, returns buffered output, and pipes new output (this already works).
+5. `useAgentStream` picks up the stream and renders the message as actively streaming.
 
 **On switching threads within the app (no page reload):**
 
-- No change needed. The `allStreams` ref in `useAgentStream` already keeps connections alive across thread switches.
+- The `allStreams` ref in `useAgentStream` keeps SSE connections alive across thread switches. However, `onStreamComplete` currently only calls `refetchThread()` when the completed thread is the selected thread. Fix: when a stream completes for a non-selected thread, also PATCH `unreadAgents` on the server and trigger a sidebar refresh so the unread dot appears.
 
 **Key change:** The client must detect `status: "streaming"` messages when loading a thread and auto-initiate re-attach. Currently it only streams when the user explicitly sends a message.
+
+**Buffer vs. persisted content:** `ProcessManager` caps its buffer at 100 chunks, which may not cover the full response for long-running streams. On re-attach, the client should use the persisted message content from disk (returned by `getThread()`) as the initial content, then append new chunks from the buffer and live stream. The stream route already reads the existing message content on re-attach — extend it to send the persisted content as the first event before replaying the buffer.
 
 ### Section 3: Unread Tracking
 
 **Server-side:**
 
 - Add an `unreadAgents` field to the thread JSON: an array of agent IDs whose messages completed while no client was listening.
-- When a stream completes in the API route and the SSE connection has been closed (client navigated away or reloaded), add that agent's ID to `unreadAgents`.
+- **Detecting "client gone":** Track SSE connection state via `request.signal` (AbortSignal). When the request is aborted (client disconnected), set a flag. On stream completion (`onClose` of the process), if the abort flag is set, add the agent's ID to `unreadAgents`. Also register a `cancel()` handler on the ReadableStream for cleanup.
+- When a stream completes in the API route and the client is gone, add that agent's ID to `unreadAgents`.
 - Extend the existing `PATCH /api/threads/{threadId}` handler to support clearing `unreadAgents` when the client opens the thread.
 
 **Client-side:**
 
-- Thread list fetches include `unreadAgents` for each thread.
+- Thread list fetches include `unreadAgents` for each thread (via the existing `/api/threads/status` polling or thread list endpoint).
 - Sidebar shows:
   - **Pulsing dot** — thread has messages with `status: "streaming"` (process still active)
   - **Solid dot** — thread has entries in `unreadAgents` (completed while you were away)
@@ -85,8 +86,9 @@ When a user sends a message and navigates away (switches threads, reloads the pa
 
 **useAgentStream hook:**
 
-- Add a `reattach(threadId, agentId)` function that initiates a stream request without sending a new user message.
-- On `onStreamComplete`, if the completed thread is not the currently selected thread, update that thread's `unreadAgents` on the server via PATCH.
+- Add a `reattach(threadId, agentId)` function that initiates a stream request with `{ agentId, prompt: "" }` — no new user message.
+- AbortController management: `reattach()` stores its AbortController keyed by `threadId:agentId`. If the user switches away before re-attach completes, abort the re-attach request.
+- On `onStreamComplete`, if the completed thread is not the currently selected thread, update that thread's `unreadAgents` on the server via PATCH and trigger a sidebar refresh.
 
 **Page load flow:**
 
@@ -99,37 +101,45 @@ When a user sends a message and navigates away (switches threads, reloads the pa
 ```
 Page Load / Thread Switch
   ├─ GET /api/threads → thread list with unreadAgents
-  ├─ GET /api/threads/{id} → thread with message statuses
-  │   └─ getThread() checks ProcessManager before marking errors
+  ├─ GET /api/threads/{id} → thread with message statuses (read-only, no side effects)
   ├─ If streaming messages found:
-  │   └─ POST /api/threads/{id}/stream (re-attach per agent)
-  │       └─ ProcessManager.getProcess() → buffered output + pipe
+  │   └─ POST /api/threads/{id}/stream { agentId, prompt: "" } (re-attach per agent)
+  │       └─ ProcessManager.getProcess() → persisted content + buffer + pipe
   └─ PATCH /api/threads/{id} → clear unreadAgents
 
 Stream Completion (server-side)
   ├─ updateMessage(status: "complete")
-  ├─ If SSE connection closed (client gone):
+  ├─ If request.signal.aborted (client gone):
   │   └─ Add agentId to thread's unreadAgents
   └─ Send done event (if client still connected)
+
+App Startup
+  └─ recoverStaleStreams() for all threads
+      └─ Checks ProcessManager per agent, marks truly stale streams as "error"
 ```
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/lib/thread-store.ts` | Fix `getThread()` recovery logic; add `unreadAgents` field support |
+| `src/lib/thread-store.ts` | Split `getThread()` into read-only + `recoverStaleStreams()`; add `unreadAgents` field support; use `withLock()` in recovery path |
+| `src/lib/types.ts` | Add `unreadAgents?: string[]` to `Thread`, `ThreadWithMessages`, and `ThreadListItem` types |
 | `src/lib/process-manager.ts` | No changes needed (already supports `getProcess()`) |
-| `src/app/api/threads/[threadId]/stream/route.ts` | On stream complete with closed connection, write `unreadAgents` |
-| `src/app/api/threads/[threadId]/status/route.ts` | New endpoint: return active streaming agents |
+| `src/app/api/threads/[threadId]/stream/route.ts` | On stream complete with aborted request, write `unreadAgents`; send persisted content before buffer on re-attach |
 | `src/app/api/threads/[threadId]/route.ts` | Extend PATCH to support clearing `unreadAgents` |
-| `src/hooks/useSSE.ts` | Add `reattach()` function |
-| `src/app/page.tsx` | Auto re-attach on thread load; clear unread on thread select |
+| `src/app/api/threads/route.ts` | Ensure `listThreads()` response includes `unreadAgents` |
+| `src/app/api/threads/status/route.ts` | Extend to include `unreadAgents` per thread |
+| `src/hooks/useSSE.ts` | Add `reattach()` function with AbortController management |
+| `src/app/page.tsx` | Auto re-attach on thread load; clear unread on thread select; handle `onStreamComplete` for non-selected threads |
 | `src/components/ThreadDetail.tsx` | Show "Reconnecting..." state during re-attach |
 | `src/components/ThreadList.tsx` | Render pulsing/solid dots based on streaming/unread state |
 
 ## Edge Cases
 
-- **Process crashes while client is away:** `getThread()` correctly marks as "error" (ProcessManager has no entry). No re-attach attempted. User sees error state.
+- **Process crashes while client is away:** `recoverStaleStreams()` marks as "error" (ProcessManager has no entry). No re-attach attempted. User sees error state.
 - **Multiple agents streaming:** Each agent tracked independently. Re-attach happens per agent. Unread tracks per agent.
-- **Rapid thread switching:** AbortController on re-attach requests prevents stale responses.
+- **Rapid thread switching:** AbortController on re-attach requests prevents stale responses. Re-attach stores controllers keyed by `threadId:agentId` and aborts on thread switch.
 - **Thread deleted while streaming:** Process cleanup via existing stop endpoint. Thread removal cleans up naturally.
+- **Concurrent agent streaming + user sends message:** `getThread()` is now read-only, so `addMessage()` no longer corrupts in-progress streaming messages from other agents.
+- **Long-running responses exceeding buffer:** Re-attach reads persisted content from disk first, then appends buffer and live stream. No content loss.
+- **`getThread()` race conditions eliminated:** Recovery logic moved to `recoverStaleStreams()` with `withLock()`. Read path is side-effect-free.
