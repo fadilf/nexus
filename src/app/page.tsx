@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { ThreadListItem, ThreadWithMessages, ThreadProcess, Agent, MessageImage, Workspace } from "@/lib/types";
 import { useAgentStream } from "@/hooks/useSSE";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import ThreadList from "@/components/ThreadList";
 import ThreadDetail from "@/components/ThreadDetail";
 import NewThreadDialog from "@/components/NewThreadDialog";
@@ -43,6 +44,8 @@ function useFetch<T>(url: string | null, deps: unknown[] = []) {
 }
 
 export default function Home() {
+  const isMobile = useIsMobile();
+
   // Workspace state
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
@@ -50,6 +53,7 @@ export default function Home() {
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<ThreadProcess[]>([]);
+  const [unreadByThread, setUnreadByThread] = useState<Record<string, string[]>>({});
   const [showNewThread, setShowNewThread] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const streamCompleteThreadId = useRef<string | null>(null);
@@ -150,7 +154,7 @@ export default function Home() {
     [selectedThreadId, refetchThread, refetchThreads]
   );
 
-  const { streamingMessages, isStreaming, sendMessage, stopAgent } = useAgentStream(
+  const { streamingMessages, isStreaming, sendMessage, stopAgent, reattach } = useAgentStream(
     selectedThreadId,
     handleStreamComplete,
     activeWorkspaceId
@@ -167,18 +171,44 @@ export default function Home() {
     }
   }, [selectedThreadId, refetchThread]);
 
+  // Auto re-attach to streams that were in progress when we navigated away
+  useEffect(() => {
+    if (!selectedThread) return;
+
+    const pendingStreams = selectedThread.messages.filter(
+      (m) => m.status === "streaming" && m.agentId
+    );
+
+    for (const msg of pendingStreams) {
+      reattach(selectedThread.id, msg.agentId!);
+    }
+  }, [selectedThread?.id, reattach]);
+
+  // Clear unread indicators when opening a thread
+  useEffect(() => {
+    if (!selectedThreadId) return;
+    fetch(wsUrl(`/api/threads/${selectedThreadId}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clearUnread: true }),
+    }).catch(() => {});
+  }, [selectedThreadId, wsUrl]);
+
   // Poll statuses
   useEffect(() => {
     const poll = () => {
-      fetch("/api/threads/status")
+      fetch(wsUrl("/api/threads/status"))
         .then((r) => r.json())
-        .then(setStatuses)
+        .then((data) => {
+          setStatuses(data.statuses ?? data);
+          setUnreadByThread(data.unreadByThread ?? {});
+        })
         .catch(() => {});
     };
     poll();
     const interval = setInterval(poll, 2500);
     return () => clearInterval(interval);
-  }, []);
+  }, [wsUrl]);
 
   // Switch workspace handler
   const handleSelectWorkspace = useCallback((id: string) => {
@@ -286,41 +316,59 @@ export default function Home() {
     [refetchThreads]
   );
 
+  const threadListEl = (
+    <ThreadList
+      threads={threadList}
+      selectedThreadId={selectedThreadId}
+      onSelectThread={setSelectedThreadId}
+      onNewThread={() => setShowNewThread(true)}
+      onOpenSettings={() => setShowSettings(true)}
+      onArchiveThread={handleArchiveThread}
+      statuses={statuses}
+      unreadByThread={unreadByThread}
+      isMobile={isMobile}
+    />
+  );
+
+  const threadDetailEl = (
+    <ThreadDetail
+      thread={selectedThread}
+      streamingMessages={streamingMessages}
+      onSendMessage={handleSendMessage}
+      onStop={stopAgent}
+      onRenameThread={handleRenameThread}
+      isStreaming={isStreaming}
+      allAgents={agents}
+      isMobile={isMobile}
+      onBack={isMobile ? () => setSelectedThreadId(null) : undefined}
+    />
+  );
+
   return (
     <WorkspaceProvider workspaceId={activeWorkspaceId}>
     <div className="flex h-screen bg-white text-zinc-900">
-      <WorkspaceBar
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        onSelectWorkspace={handleSelectWorkspace}
-        onAddWorkspace={() => setShowAddWorkspace(true)}
-        onRemoveWorkspace={handleRemoveWorkspace}
-        onEditWorkspace={handleEditWorkspace}
-      />
-      <div className="relative flex-shrink-0" style={{ width: sidebarWidth }}>
-        <ThreadList
-          threads={threadList}
-          selectedThreadId={selectedThreadId}
-          onSelectThread={setSelectedThreadId}
-          onNewThread={() => setShowNewThread(true)}
-          onOpenSettings={() => setShowSettings(true)}
-          onArchiveThread={handleArchiveThread}
-          statuses={statuses}
-        />
-        <div
-          onMouseDown={startResize}
-          className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-violet-400/40 active:bg-violet-400/60 transition-colors"
-        />
-      </div>
-      <ThreadDetail
-        thread={selectedThread}
-        streamingMessages={streamingMessages}
-        onSendMessage={handleSendMessage}
-        onStop={stopAgent}
-        onRenameThread={handleRenameThread}
-        isStreaming={isStreaming}
-        allAgents={agents}
-      />
+      {isMobile ? (
+        selectedThreadId ? threadDetailEl : threadListEl
+      ) : (
+        <>
+          <WorkspaceBar
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSelectWorkspace={handleSelectWorkspace}
+            onAddWorkspace={() => setShowAddWorkspace(true)}
+            onRemoveWorkspace={handleRemoveWorkspace}
+            onEditWorkspace={handleEditWorkspace}
+          />
+          <div className="relative flex-shrink-0" style={{ width: sidebarWidth }}>
+            {threadListEl}
+            <div
+              onMouseDown={startResize}
+              className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-violet-400/40 active:bg-violet-400/60 transition-colors"
+            />
+          </div>
+          {threadDetailEl}
+        </>
+      )}
       <NewThreadDialog
         open={showNewThread}
         agents={agents}
