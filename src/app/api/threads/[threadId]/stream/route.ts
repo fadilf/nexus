@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getThread, addMessage, updateMessage } from "@/lib/thread-store";
+import { getThread, addMessage, updateMessage, addUnreadAgent } from "@/lib/thread-store";
 import { getProcessManager } from "@/lib/process-manager";
 import { createStreamParser } from "@/lib/stream-parser";
 import { AgentModel, MessageImage } from "@/lib/types";
@@ -44,14 +44,19 @@ export async function POST(
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();
-        // Send buffered content through parser
-        for (const chunk of existing.buffer) {
-          const events = reattachParser(chunk);
-          for (const event of events) {
-            if (event.type === "content") {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-            }
-          }
+        let clientDisconnected = false;
+        request.signal.addEventListener("abort", () => {
+          clientDisconnected = true;
+        });
+
+        // Send persisted content as initial event (instead of replaying buffer)
+        const streamingMsg = thread!.messages.find(
+          (m) => m.agentId === agentId && m.status === "streaming"
+        );
+        if (streamingMsg && streamingMsg.content) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "initial", content: streamingMsg.content })}\n\n`)
+          );
         }
 
         // Pipe future output through parser
@@ -69,8 +74,12 @@ export async function POST(
         });
 
         existing.process.on("close", (code) => {
+          const status = code === 0 ? "complete" : "error";
+          if (clientDisconnected && status === "complete") {
+            addUnreadAgent(workspaceDir, threadId, agentId).catch(() => {});
+          }
           try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", status: code === 0 ? "complete" : "error" })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", status })}\n\n`));
             controller.close();
           } catch {
             // Already closed
@@ -86,6 +95,14 @@ export async function POST(
         Connection: "keep-alive",
       },
     });
+  }
+
+  // Guard: empty prompt with no running process means stale re-attach attempt
+  if (!prompt) {
+    return NextResponse.json(
+      { error: "Process no longer running" },
+      { status: 410 }
+    );
   }
 
   // Create assistant message placeholder
@@ -111,6 +128,10 @@ export async function POST(
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
+      let clientDisconnected = false;
+      request.signal.addEventListener("abort", () => {
+        clientDisconnected = true;
+      });
       const cwd = workspaceDir;
 
       try {
@@ -152,6 +173,9 @@ export async function POST(
           // onClose
           (code) => {
             const status = code === 0 ? "complete" : "error";
+            if (clientDisconnected && status === "complete") {
+              addUnreadAgent(workspaceDir, threadId, agentId).catch(() => {});
+            }
             updateMessage(workspaceDir, threadId, assistantMsg.id, {
               content: accumulatedContent || (status === "error" ? `[Process exited with code ${code}]` : ""),
               status,
