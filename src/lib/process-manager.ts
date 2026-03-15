@@ -212,6 +212,12 @@ export function getProcessManager(): ProcessManager {
   const g = globalThis as unknown as Record<symbol, ProcessManager>;
   if (!g[globalKey]) {
     g[globalKey] = new ProcessManager();
+    import("./thread-store").then(({ recoverStaleStreams }) => {
+      const workspaceDir = process.env.NEXUS_PROJECT_DIR || process.cwd();
+      recoverStaleStreams(workspaceDir).catch((err) => {
+        console.error("Failed to recover stale streams:", err);
+      });
+    });
     // Cleanup on exit
     process.on("exit", () => g[globalKey]?.killAll());
     process.on("SIGINT", () => {
