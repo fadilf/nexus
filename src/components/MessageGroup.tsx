@@ -67,6 +67,9 @@ export default function MessageGroup({
             <span className="text-sm font-bold text-zinc-900">
               {isUser ? displayName : agent?.name || "Unknown"}
             </span>
+            {!isUser && agent?.model && (
+              <span className="text-[11px] text-zinc-400">{agent.model}</span>
+            )}
             {isStreaming && !isUser && (
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
             )}
