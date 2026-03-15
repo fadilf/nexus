@@ -22,7 +22,7 @@ function renderContent(content: string, isOwn: boolean) {
       <span
         key={i}
         className={`font-medium ${
-          isOwn ? "text-violet-200" : "text-violet-600"
+          isOwn ? "text-violet-200" : "text-violet-600 dark:text-violet-400"
         }`}
       >
         {part}
@@ -52,7 +52,7 @@ export default function MessageBubble({
   const avatar = (
     <div
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-        model ? "bg-zinc-100" : "bg-violet-600 text-white"
+        model ? "bg-zinc-100 dark:bg-zinc-800" : "bg-violet-600 text-white"
       }`}
       style={model ? { border: `1.5px solid ${avatarColor}`, boxShadow: `inset 0 2px 6px ${avatarColor}80` } : undefined}
     >
@@ -72,10 +72,10 @@ export default function MessageBubble({
       {avatar}
       <div className={`flex max-w-[75%] flex-col ${isOwn ? "items-end" : "items-start"}`}>
         {!isOwn && agentName && (
-          <span className="mb-1 text-xs text-zinc-500">
+          <span className="mb-1 text-xs text-zinc-500 dark:text-zinc-400">
             {agentName}
             {model && (
-              <span className="ml-1 text-zinc-400">· {model}</span>
+              <span className="ml-1 text-zinc-400 dark:text-zinc-500">· {model}</span>
             )}
           </span>
         )}
@@ -102,8 +102,8 @@ export default function MessageBubble({
             isOwn
               ? "bg-violet-600 text-white whitespace-pre-wrap"
               : isError
-              ? "bg-red-50 text-red-900 border border-red-200"
-              : "bg-zinc-100 text-zinc-900"
+              ? "bg-red-50 dark:bg-red-900/30 text-red-900 dark:text-red-400 border border-red-200 dark:border-red-800"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
           }`}
         >
           {isOwn ? (
@@ -123,30 +123,30 @@ export default function MessageBubble({
                   code: ({ className, children, node }) => {
                     const isBlock = className?.includes("language-") || node?.position?.start.line !== node?.position?.end.line || (typeof children === "string" && children.includes("\n"));
                     return isBlock ? (
-                      <code className={`block bg-zinc-800 text-zinc-100 rounded-lg p-3 my-2 text-xs font-mono overflow-x-auto whitespace-pre ${className || ""}`}>
+                      <code className={`block bg-zinc-800 dark:bg-zinc-900 text-zinc-100 rounded-lg p-3 my-2 text-xs font-mono overflow-x-auto whitespace-pre ${className || ""}`}>
                         {children}
                       </code>
                     ) : (
-                      <code className="bg-zinc-200 text-zinc-800 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
+                      <code className="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
                     );
                   },
                   pre: ({ children }) => <>{children}</>,
                   a: ({ href, children }) => (
-                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-600 underline hover:text-violet-800">
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 underline hover:text-violet-800 dark:hover:text-violet-300">
                       {children}
                     </a>
                   ),
                   blockquote: ({ children }) => (
-                    <blockquote className="border-l-2 border-zinc-300 pl-3 my-2 text-zinc-600 italic">{children}</blockquote>
+                    <blockquote className="border-l-2 border-zinc-300 dark:border-zinc-600 pl-3 my-2 text-zinc-600 dark:text-zinc-400 italic">{children}</blockquote>
                   ),
                   table: ({ children }) => (
                     <div className="overflow-x-auto my-2">
                       <table className="min-w-full text-xs border-collapse">{children}</table>
                     </div>
                   ),
-                  th: ({ children }) => <th className="border border-zinc-300 px-2 py-1 bg-zinc-200 font-semibold text-left">{children}</th>,
-                  td: ({ children }) => <td className="border border-zinc-300 px-2 py-1">{children}</td>,
-                  hr: () => <hr className="my-2 border-zinc-300" />,
+                  th: ({ children }) => <th className="border border-zinc-300 dark:border-zinc-600 px-2 py-1 bg-zinc-200 dark:bg-zinc-700 font-semibold text-left">{children}</th>,
+                  td: ({ children }) => <td className="border border-zinc-300 dark:border-zinc-600 px-2 py-1">{children}</td>,
+                  hr: () => <hr className="my-2 border-zinc-300 dark:border-zinc-600" />,
                   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
                 }}
               >
@@ -155,7 +155,7 @@ export default function MessageBubble({
             </div>
           )}
           {isStreaming && !message.content && (
-            <span className="text-xs text-zinc-400 italic">Reconnecting...</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 italic">Reconnecting...</span>
           )}
           {isStreaming && (
             <span className="inline-flex ml-1">
@@ -163,7 +163,7 @@ export default function MessageBubble({
             </span>
           )}
         </div>
-        <span className="mt-1 text-[11px] text-zinc-400">
+        <span className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
           {formatTime(message.timestamp)}
         </span>
       </div>

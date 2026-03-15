@@ -64,7 +64,7 @@ export default function ThreadDetail({
 
   if (!thread) {
     return (
-      <div className="flex flex-1 items-center justify-center text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-zinc-400 dark:text-zinc-500">
         Select a thread to view
       </div>
     );
@@ -87,12 +87,12 @@ export default function ThreadDetail({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className={`border-b border-zinc-200 ${isMobile ? "px-4" : "px-6"} py-4`}>
+      <div className={`border-b border-zinc-200 dark:border-zinc-700 ${isMobile ? "px-4" : "px-6"} py-4`}>
         <div className="flex items-center gap-2">
           {onBack && (
             <button
               onClick={onBack}
-              className="shrink-0 -ml-1 rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+              className="shrink-0 -ml-1 rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -116,12 +116,12 @@ export default function ThreadDetail({
                   setIsEditingTitle(false);
                 }
               }}
-              className="w-full rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-500"
+              className="w-full rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-zinc-400"
             />
           ) : (
             <>
               <h2
-                className={`text-sm font-medium text-zinc-900 ${isMobile ? "truncate" : "cursor-pointer hover:text-zinc-600"}`}
+                className={`text-sm font-medium text-zinc-900 dark:text-zinc-100 ${isMobile ? "truncate" : "cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300"}`}
                 onDoubleClick={isMobile ? undefined : () => {
                   setEditTitle(thread.title);
                   setIsEditingTitle(true);
@@ -138,7 +138,7 @@ export default function ThreadDetail({
                     setIsEditingTitle(true);
                     setTimeout(() => titleInputRef.current?.select(), 0);
                   }}
-                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -150,16 +150,16 @@ export default function ThreadDetail({
           {thread.agents.map((agent) => (
             <span
               key={agent.id}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs"
+              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs dark:bg-zinc-800"
             >
               <span
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-100"
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800"
                 style={{ border: `1.5px solid ${agent.avatarColor}`, boxShadow: `inset 0 1px 4px ${agent.avatarColor}80` }}
               >
                 <ModelIcon model={agent.model} icon={agent.icon} className="h-2.5 w-2.5" />
               </span>
-              <span className="text-zinc-700">{agent.name}</span>
-              <span className="text-zinc-500">· {agent.model}</span>
+              <span className="text-zinc-700 dark:text-zinc-300">{agent.name}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">· {agent.model}</span>
             </span>
           ))}
         </div>
