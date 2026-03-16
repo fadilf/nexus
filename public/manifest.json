@@ -1,6 +1,6 @@
 {
-  "name": "Nexus",
-  "short_name": "Nexus",
+  "name": "Entourage",
+  "short_name": "Entourage",
   "description": "Thread-based messaging client",
   "start_url": "/",
   "display": "standalone",

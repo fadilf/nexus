@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Nexus",
+  title: "Entourage",
   description: "Thread-based messaging client",
   icons: {
     icon: "/logo.png",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Nexus",
+    title: "Entourage",
   },
 };
 

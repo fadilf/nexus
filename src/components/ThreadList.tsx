@@ -246,8 +246,8 @@ export default function ThreadList({
     <div className="flex h-full w-full flex-col border-r border-zinc-200 dark:border-zinc-700">
       <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Nexus" className="h-7 w-7" />
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Nexus</h1>
+          <img src="/logo.png" alt="Entourage" className="h-7 w-7" />
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Entourage</h1>
         </div>
         <button
           onClick={onNewThread}

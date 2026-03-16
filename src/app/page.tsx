@@ -82,7 +82,7 @@ export default function Home() {
       .then((ws: Workspace[]) => {
         setWorkspaces(ws);
         // Restore from localStorage or use first
-        const saved = localStorage.getItem("nexus-active-workspace");
+        const saved = localStorage.getItem("entourage-active-workspace");
         const match = ws.find((w) => w.id === saved);
         setActiveWorkspaceId(match ? match.id : ws[0]?.id ?? null);
       })
@@ -92,12 +92,12 @@ export default function Home() {
   // Persist active workspace
   useEffect(() => {
     if (activeWorkspaceId) {
-      localStorage.setItem("nexus-active-workspace", activeWorkspaceId);
+      localStorage.setItem("entourage-active-workspace", activeWorkspaceId);
     }
   }, [activeWorkspaceId]);
 
   useLayoutEffect(() => {
-    const saved = localStorage.getItem("nexus-sidebar-width");
+    const saved = localStorage.getItem("entourage-sidebar-width");
     if (saved) setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Number(saved))));
   }, []);
 
@@ -128,7 +128,7 @@ export default function Home() {
 
   // Persist sidebar width
   useEffect(() => {
-    localStorage.setItem("nexus-sidebar-width", String(sidebarWidth));
+    localStorage.setItem("entourage-sidebar-width", String(sidebarWidth));
   }, [sidebarWidth]);
 
   const configUrl = activeWorkspaceId ? wsUrl("/api/config") : null;
