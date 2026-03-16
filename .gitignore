@@ -25,6 +25,10 @@
 .worktrees/
 *.pem
 
+# app data
+.nexus
+.entourage
+
 # debug
 npm-debug.log*
 yarn-debug.log*
