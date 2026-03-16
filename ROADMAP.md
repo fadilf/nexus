@@ -1,4 +1,4 @@
-# Nexus Roadmap
+# Entourage Roadmap
 
 ## Short-term
 - [ ] Render agent messages with Markdown formatting (headings, code blocks, lists, bold/italic, etc.)
@@ -13,4 +13,4 @@
 - [ ] Git worktree support — allow agents to work in isolated worktrees to avoid conflicts with the main working directory
 
 ## Long-term
-- [ ] Electron app — package Nexus as a native desktop application
+- [ ] Electron app — package Entourage as a native desktop application

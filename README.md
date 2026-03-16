@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="public/logo.png" alt="Nexus" width="128" />
+  <img src="public/logo.png" alt="Entourage" width="128" />
 </p>
 
-# Nexus
+# Entourage
 
-A multi-agent coding tool with a unified chat UI. Nexus spawns CLI subprocesses (Claude CLI, Gemini CLI) against a local project directory, letting you run real-time streaming conversations with multiple AI agents side by side.
+A multi-agent coding tool with a unified chat UI. Entourage spawns CLI subprocesses (Claude CLI, Gemini CLI) against a local project directory, letting you run real-time streaming conversations with multiple AI agents side by side.
 
 Create custom agent profiles with distinct names, icons, colors, and personality system prompts. Use @mentions to route messages to specific agents within a thread.
 
@@ -37,7 +37,7 @@ Open [http://localhost:3000](http://localhost:3000) to start chatting.
 
 ### Environment
 
-- `NEXUS_PROJECT_DIR` — Working directory for CLI subprocesses (defaults to `process.cwd()`)
+- `ENTOURAGE_PROJECT_DIR` — Working directory for CLI subprocesses (defaults to `process.cwd()`)
 
 ## Stack
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add a dark mode toggle to Nexus that respects the user's OS preference by default and allows manual override via a sun/moon icon button in the Settings dialog. Theme preference persists in `localStorage`.
+Add a dark mode toggle to Entourage that respects the user's OS preference by default and allows manual override via a sun/moon icon button in the Settings dialog. Theme preference persists in `localStorage`.
 
 ## Decisions
 

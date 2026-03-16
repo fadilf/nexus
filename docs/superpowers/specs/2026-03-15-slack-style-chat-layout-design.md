@@ -6,7 +6,7 @@
 
 ## Summary
 
-Restyle Nexus's chat message display from a bubble-based chat interface to a Slack-style flat message layout. This is a pure rendering change — messages are grouped at display time, the data layer is untouched, and the existing `MessageBubble.tsx` is preserved for rollback.
+Restyle Entourage's chat message display from a bubble-based chat interface to a Slack-style flat message layout. This is a pure rendering change — messages are grouped at display time, the data layer is untouched, and the existing `MessageBubble.tsx` is preserved for rollback.
 
 ## Motivation
 

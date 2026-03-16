@@ -12,7 +12,7 @@
 
 **No test framework configured** — verification is via `npm run build` (type checking), `npm run lint`, and manual testing.
 
-**Known limitation:** `recoverStaleStreams()` runs for a single workspace directory (from `NEXUS_PROJECT_DIR` or `cwd()`). Multi-workspace recovery would require iterating all known workspaces, which is out of scope for this change.
+**Known limitation:** `recoverStaleStreams()` runs for a single workspace directory (from `ENTOURAGE_PROJECT_DIR` or `cwd()`). Multi-workspace recovery would require iterating all known workspaces, which is out of scope for this change.
 
 ---
 
@@ -163,7 +163,7 @@ In `src/lib/process-manager.ts`, in the `getProcessManager()` function (lines 21
 ```typescript
 // Add after line 214 (g[globalKey] = new ProcessManager();):
 import("./thread-store").then(({ recoverStaleStreams }) => {
-  const workspaceDir = process.env.NEXUS_PROJECT_DIR || process.cwd();
+  const workspaceDir = process.env.ENTOURAGE_PROJECT_DIR || process.cwd();
   recoverStaleStreams(workspaceDir).catch((err) => {
     console.error("Failed to recover stale streams:", err);
   });

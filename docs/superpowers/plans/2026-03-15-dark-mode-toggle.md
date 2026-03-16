@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a dark mode toggle to Nexus that respects OS preference, persists via localStorage, and is toggled from the Settings dialog.
+**Goal:** Add a dark mode toggle to Entourage that respects OS preference, persists via localStorage, and is toggled from the Settings dialog.
 
 **Architecture:** Install `next-themes` to manage theme state. Create a `Providers.tsx` client component wrapper. Add `dark:` Tailwind variants to all components with hardcoded light-mode colors. Toggle lives in `SettingsDialog.tsx`.
 
@@ -145,7 +145,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Nexus",
+  title: "Entourage",
   description: "Thread-based messaging client",
   icons: {
     icon: "/logo.png",
@@ -155,7 +155,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Nexus",
+    title: "Entourage",
   },
 };
 
@@ -409,7 +409,7 @@ Apply these replacements:
 | `text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600` (overflow menu, line 192) | `text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300` |
 | `border-r border-zinc-200` (sidebar border, line 246) | `border-r border-zinc-200 dark:border-zinc-700` |
 | `border-b border-zinc-200` (header border, line 247) | `border-b border-zinc-200 dark:border-zinc-700` |
-| `text-lg font-semibold text-zinc-900` (Nexus title, line 250) | `text-lg font-semibold text-zinc-900 dark:text-zinc-100` |
+| `text-lg font-semibold text-zinc-900` (Entourage title, line 250) | `text-lg font-semibold text-zinc-900 dark:text-zinc-100` |
 | `bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800` (New button, line 254) | `bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200` |
 | `text-sm text-zinc-400` (empty state, line 261) | `text-sm text-zinc-400 dark:text-zinc-500` |
 | `border-t border-zinc-100` (archived separator, line 279) | `border-t border-zinc-100 dark:border-zinc-700` |

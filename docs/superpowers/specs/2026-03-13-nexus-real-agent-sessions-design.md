@@ -1,8 +1,8 @@
-# Nexus: Real Multi-Agent Coding Sessions
+# Entourage: Real Multi-Agent Coding Sessions
 
 ## Problem
 
-Nexus is currently a static demo — hardcoded threads with fake messages. The goal is to make it a real, functional alternative for running coding agents (Claude, Gemini) against a local file directory, with a unified chat UI.
+Entourage is currently a static demo — hardcoded threads with fake messages. The goal is to make it a real, functional alternative for running coding agents (Claude, Gemini) against a local file directory, with a unified chat UI.
 
 ## Design Decisions
 
@@ -10,9 +10,9 @@ Nexus is currently a static demo — hardcoded threads with fake messages. The g
 - **Multi-agent threads** — a thread can include both Claude and Gemini
 - **@mention routing** — `@claude fix auth` routes to Claude; no mention = last-active agent
 - **Subprocess CLIs** — spawn `claude` and `gemini` CLI processes (not direct API calls)
-- **Single working directory** — Nexus launches pointed at one project dir
+- **Single working directory** — Entourage launches pointed at one project dir
 - **Parallel execution** — multiple agents can run simultaneously across threads
-- **File-based persistence** — `.nexus/threads/*.json` in the project directory
+- **File-based persistence** — `.entourage/threads/*.json` in the project directory
 - **Full auto mode** — no approval gates, agents execute freely
 - **MVP scope** — chat + execute only (no file viewer, no terminal panel)
 
@@ -28,11 +28,11 @@ Browser (React UI)
         │
 Next.js API Routes (Server)
   ├── ProcessManager (singleton) — spawns/tracks CLI subprocesses
-  ├── ThreadStore — file CRUD for .nexus/threads/*.json
+  ├── ThreadStore — file CRUD for .entourage/threads/*.json
   └── CLI subprocesses (claude, gemini) → read/write project files
         │
         ▼
-Local filesystem (project directory + .nexus/)
+Local filesystem (project directory + .entourage/)
 ```
 
 ## Data Model
@@ -73,7 +73,7 @@ type ThreadProcess = {
 };
 ```
 
-Each thread is stored as `.nexus/threads/{threadId}.json` containing `{ thread, messages }`.
+Each thread is stored as `.entourage/threads/{threadId}.json` containing `{ thread, messages }`.
 
 ## CLI Integration
 
@@ -94,7 +94,7 @@ Both CLIs inherit the working directory from the spawning process and emit newli
 |------|---------|
 | `src/lib/types.ts` | Shared type definitions |
 | `src/lib/config.ts` | Constants, default agents, CLI templates |
-| `src/lib/thread-store.ts` | File-based CRUD for `.nexus/` |
+| `src/lib/thread-store.ts` | File-based CRUD for `.entourage/` |
 | `src/lib/process-manager.ts` | Subprocess lifecycle singleton |
 | `src/lib/mentions.ts` | @mention parsing utility |
 | `src/lib/stream-parser.ts` | CLI stream-json output parser |

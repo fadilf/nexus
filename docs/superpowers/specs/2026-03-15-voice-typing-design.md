@@ -8,7 +8,7 @@ Add speech-to-text voice typing to the message input. Users click a mic icon ins
 
 Use the browser's built-in `SpeechRecognition` (Web Speech API). Zero dependencies, no API keys, supports interim results natively. Only renders the mic button in supported browsers (Chrome, Edge). Safari's support for `continuous` mode and `interimResults` is unreliable, so treat it as unsupported.
 
-Note: The Web Speech API requires a secure context (HTTPS or localhost). Since Nexus is a local dev tool running on localhost, this is not a concern in practice.
+Note: The Web Speech API requires a secure context (HTTPS or localhost). Since Entourage is a local dev tool running on localhost, this is not a concern in practice.
 
 ## New Hook: `useVoiceInput`
 
