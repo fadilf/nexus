@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Pencil, Trash2, FolderOpen } from "lucide-react";
 import { Workspace } from "@/lib/types";
 
@@ -120,8 +121,8 @@ export default function WorkspaceBar({
         <Plus size={20} />
       </button>
 
-      {/* Context menu */}
-      {contextMenu && (
+      {/* Context menu via portal to escape overflow-hidden */}
+      {contextMenu && createPortal(
         <div
           ref={menuRef}
           className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-40"
@@ -160,7 +161,8 @@ export default function WorkspaceBar({
             <Trash2 size={14} />
             Remove
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

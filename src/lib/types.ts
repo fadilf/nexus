@@ -38,6 +38,10 @@ export type ToolCall = {
   output?: string;
 };
 
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_call"; toolCall: ToolCall };
+
 export type Message = {
   id: string;
   threadId: string;
@@ -48,6 +52,7 @@ export type Message = {
   status: "streaming" | "complete" | "error";
   images?: MessageImage[];
   toolCalls?: ToolCall[];
+  contentBlocks?: ContentBlock[];
 };
 
 export type ThreadWithMessages = Thread & { messages: Message[] };

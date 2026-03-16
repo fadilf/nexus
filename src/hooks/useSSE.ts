@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { Agent, MessageImage, ToolCall } from "@/lib/types";
+import { Agent, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
 
 type StreamingMessage = {
   agentId: string;
   content: string;
   toolCalls?: ToolCall[];
+  contentBlocks?: ContentBlock[];
 };
 
 export function useAgentStream(
@@ -98,10 +99,18 @@ export function useAgentStream(
                 const threadStreams = allStreams.current.get(targetThreadId);
                 if (threadStreams) {
                   const existing = threadStreams.get(agentId);
+                  const blocks = [...(existing?.contentBlocks ?? [])];
+                  const lastBlock = blocks[blocks.length - 1];
+                  if (lastBlock && lastBlock.type === "text") {
+                    blocks[blocks.length - 1] = { type: "text", text: lastBlock.text + event.text };
+                  } else {
+                    blocks.push({ type: "text", text: event.text });
+                  }
                   threadStreams.set(agentId, {
                     ...existing,
                     agentId,
                     content: (existing?.content ?? "") + event.text,
+                    contentBlocks: blocks,
                   });
                   triggerRender();
                 }
@@ -110,8 +119,11 @@ export function useAgentStream(
                 if (threadStreams) {
                   const existing = threadStreams.get(agentId);
                   const toolCalls = [...(existing?.toolCalls ?? [])];
-                  toolCalls.push({ id: event.toolId, name: event.toolName, status: "running", input: event.input });
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls });
+                  const tc: ToolCall = { id: event.toolId, name: event.toolName, status: "running", input: event.input };
+                  toolCalls.push(tc);
+                  const blocks = [...(existing?.contentBlocks ?? [])];
+                  blocks.push({ type: "tool_call", toolCall: tc });
+                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
                   triggerRender();
                 }
               } else if (event.type === "tool_result") {
@@ -124,7 +136,14 @@ export function useAgentStream(
                     tc.status = "complete";
                     tc.output = event.output;
                   }
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls });
+                  // Also update the matching block
+                  const blocks = [...(existing?.contentBlocks ?? [])];
+                  const blockIdx = blocks.findIndex((b) => b.type === "tool_call" && b.toolCall.id === event.toolId);
+                  if (blockIdx >= 0) {
+                    const block = blocks[blockIdx] as { type: "tool_call"; toolCall: ToolCall };
+                    blocks[blockIdx] = { type: "tool_call", toolCall: { ...block.toolCall, status: "complete", output: event.output } };
+                  }
+                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
                   triggerRender();
                 }
               } else if (event.type === "done") {
@@ -248,10 +267,18 @@ export function useAgentStream(
                 const threadStreams = allStreams.current.get(reattachThreadId);
                 if (threadStreams) {
                   const existing = threadStreams.get(agentId);
+                  const blocks = [...(existing?.contentBlocks ?? [])];
+                  const lastBlock = blocks[blocks.length - 1];
+                  if (lastBlock && lastBlock.type === "text") {
+                    blocks[blocks.length - 1] = { type: "text", text: lastBlock.text + event.text };
+                  } else {
+                    blocks.push({ type: "text", text: event.text });
+                  }
                   threadStreams.set(agentId, {
                     ...existing,
                     agentId,
                     content: (existing?.content ?? "") + event.text,
+                    contentBlocks: blocks,
                   });
                   triggerRender();
                 }
@@ -260,8 +287,11 @@ export function useAgentStream(
                 if (threadStreams) {
                   const existing = threadStreams.get(agentId);
                   const toolCalls = [...(existing?.toolCalls ?? [])];
-                  toolCalls.push({ id: event.toolId, name: event.toolName, status: "running", input: event.input });
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls });
+                  const tc: ToolCall = { id: event.toolId, name: event.toolName, status: "running", input: event.input };
+                  toolCalls.push(tc);
+                  const blocks = [...(existing?.contentBlocks ?? [])];
+                  blocks.push({ type: "tool_call", toolCall: tc });
+                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
                   triggerRender();
                 }
               } else if (event.type === "tool_result") {
@@ -274,7 +304,13 @@ export function useAgentStream(
                     tc.status = "complete";
                     tc.output = event.output;
                   }
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls });
+                  const blocks = [...(existing?.contentBlocks ?? [])];
+                  const blockIdx = blocks.findIndex((b) => b.type === "tool_call" && b.toolCall.id === event.toolId);
+                  if (blockIdx >= 0) {
+                    const block = blocks[blockIdx] as { type: "tool_call"; toolCall: ToolCall };
+                    blocks[blockIdx] = { type: "tool_call", toolCall: { ...block.toolCall, status: "complete", output: event.output } };
+                  }
+                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
                   triggerRender();
                 }
               } else if (event.type === "done") {

@@ -20,7 +20,7 @@ export default function ThreadDetail({
   onBack,
 }: {
   thread: ThreadWithMessages | null;
-  streamingMessages: Map<string, { agentId: string; content: string; toolCalls?: import("@/lib/types").ToolCall[] }>;
+  streamingMessages: Map<string, { agentId: string; content: string; toolCalls?: import("@/lib/types").ToolCall[]; contentBlocks?: import("@/lib/types").ContentBlock[] }>;
   onSendMessage: (content: string, images?: MessageImage[]) => void;
   onStop: (agentId: string) => void;
   onRenameThread?: (title: string) => void;
@@ -78,6 +78,7 @@ export default function ThreadDetail({
       timestamp: new Date().toISOString(),
       status: "streaming" as const,
       ...(data.toolCalls?.length ? { toolCalls: data.toolCalls } : {}),
+      ...(data.contentBlocks?.length ? { contentBlocks: data.contentBlocks } : {}),
     })
   );
 

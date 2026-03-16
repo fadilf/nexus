@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getThread, addMessage, updateMessage, addUnreadAgent } from "@/lib/thread-store";
 import { getProcessManager } from "@/lib/process-manager";
 import { createStreamParser } from "@/lib/stream-parser";
-import { AgentModel, MessageImage, ToolCall } from "@/lib/types";
+import { AgentModel, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
 import { loadAgents } from "@/lib/agent-store";
 import { buildContextualPrompt } from "@/lib/context";
 import path from "path";
@@ -123,6 +123,7 @@ export async function POST(
 
   let accumulatedContent = "";
   const accumulatedToolCalls: ToolCall[] = [];
+  const accumulatedBlocks: ContentBlock[] = [];
   let lastPersist = Date.now();
   const parser = createStreamParser(agent.model as AgentModel);
 
@@ -148,18 +149,27 @@ export async function POST(
             for (const event of events) {
               if (event.type === "content") {
                 accumulatedContent += event.text;
+                // Append to last text block or create new one
+                const lastBlock = accumulatedBlocks[accumulatedBlocks.length - 1];
+                if (lastBlock && lastBlock.type === "text") {
+                  lastBlock.text += event.text;
+                } else {
+                  accumulatedBlocks.push({ type: "text", text: event.text });
+                }
                 try {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
                 } catch {
                   // Client disconnected
                 }
               } else if (event.type === "tool_start") {
-                accumulatedToolCalls.push({
+                const tc: ToolCall = {
                   id: event.toolId,
                   name: event.toolName,
                   status: "running",
                   input: event.input,
-                });
+                };
+                accumulatedToolCalls.push(tc);
+                accumulatedBlocks.push({ type: "tool_call", toolCall: tc });
                 try {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
                 } catch { /* Client disconnected */ }
@@ -190,6 +200,7 @@ export async function POST(
               updateMessage(workspaceDir, threadId, assistantMsg.id, {
                 content: accumulatedContent,
                 ...(accumulatedToolCalls.length > 0 ? { toolCalls: accumulatedToolCalls } : {}),
+                ...(accumulatedBlocks.length > 0 ? { contentBlocks: accumulatedBlocks } : {}),
               }).catch(() => {});
             }
           },
@@ -209,6 +220,7 @@ export async function POST(
               content: accumulatedContent || (status === "error" ? `[Process exited with code ${code}]` : ""),
               status,
               ...(accumulatedToolCalls.length > 0 ? { toolCalls: accumulatedToolCalls } : {}),
+              ...(accumulatedBlocks.length > 0 ? { contentBlocks: accumulatedBlocks } : {}),
             }).catch(() => {});
 
             try {

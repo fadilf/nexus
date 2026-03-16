@@ -43,6 +43,15 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
           }
         }
 
+        // Gemini CLI tool events (from stream-json)
+        if (model === "gemini") {
+          const toolEvents = extractGeminiToolEvents(json);
+          if (toolEvents.length > 0) {
+            events.push(...toolEvents);
+            continue;
+          }
+        }
+
         const text = extractText(json, model);
         if (text) {
           events.push({ type: "content", text });
@@ -103,6 +112,31 @@ function extractClaudeToolEvents(json: Record<string, unknown>): StreamEvent[] {
   return events;
 }
 
+/**
+ * Extract tool events from Gemini CLI's stream-json format.
+ *
+ * Gemini CLI emits tool calls as top-level events:
+ *   {"type":"tool_use","tool_name":"read_file","tool_id":"read_file_123","parameters":{...}}
+ *
+ * And tool results as:
+ *   {"type":"tool_result","tool_id":"read_file_123","status":"success|error","output":"..."}
+ */
+function extractGeminiToolEvents(json: Record<string, unknown>): StreamEvent[] {
+  const events: StreamEvent[] = [];
+
+  if (json.type === "tool_use" && typeof json.tool_id === "string" && typeof json.tool_name === "string") {
+    const input = json.parameters ? JSON.stringify(json.parameters) : undefined;
+    events.push({ type: "tool_start", toolId: json.tool_id, toolName: json.tool_name, input });
+  }
+
+  if (json.type === "tool_result" && typeof json.tool_id === "string") {
+    const output = typeof json.output === "string" ? json.output : "";
+    events.push({ type: "tool_result", toolId: json.tool_id, output });
+  }
+
+  return events;
+}
+
 function extractText(json: Record<string, unknown>, model: AgentModel): string | null {
   // Claude stream-json format
   if (model === "claude") {
@@ -139,8 +173,8 @@ function extractText(json: Record<string, unknown>, model: AgentModel): string |
 
   // Gemini stream-json format
   if (model === "gemini") {
-    // Skip non-content messages (init, user message echo, metadata)
-    if (json.type === "init" || json.role === "user") {
+    // Skip non-content messages (init, user message echo, metadata, tool events)
+    if (json.type === "init" || json.type === "tool_use" || json.type === "tool_result" || json.role === "user") {
       return null;
     }
     if (typeof json.text === "string") {

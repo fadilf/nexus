@@ -54,6 +54,89 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   );
 }
 
+function MarkdownBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+  if (!content && isStreaming) return null;
+  if (!content) return null;
+  return (
+    <div className="slack-markdown text-sm leading-relaxed text-zinc-900 dark:text-zinc-100">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        components={{
+          h1: ({ children }) => (
+            <h1 className="text-base font-bold mt-4 mb-1.5 first:mt-0">{children}</h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="text-sm font-bold mt-4 mb-1.5 first:mt-0">{children}</h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="text-sm font-semibold mt-3 mb-1 first:mt-0">{children}</h3>
+          ),
+          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+          ul: ({ children }) => (
+            <ul className="list-disc pl-5 mb-2 last:mb-0 space-y-0.5">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="list-decimal pl-5 mb-2 last:mb-0 space-y-0.5">{children}</ol>
+          ),
+          li: ({ children }) => <li>{children}</li>,
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-600 underline hover:text-violet-800"
+            >
+              {children}
+            </a>
+          ),
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-2 border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-800 pl-3 py-1 my-2 text-zinc-600 dark:text-zinc-400 italic">
+              {children}
+            </blockquote>
+          ),
+          table: ({ children }) => (
+            <div className="overflow-x-auto my-2">
+              <table className="min-w-full text-xs border-collapse">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="bg-zinc-100 dark:bg-zinc-800">{children}</thead>,
+          th: ({ children }) => (
+            <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 font-semibold text-left">{children}</th>
+          ),
+          td: ({ children }) => (
+            <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">{children}</td>
+          ),
+          tr: ({ children }) => (
+            <tr className="even:bg-zinc-50 dark:even:bg-zinc-800">{children}</tr>
+          ),
+          hr: () => <hr className="my-3 border-zinc-200 dark:border-zinc-700" />,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          pre: ({ children }) => <>{children}</>,
+          code: ({ className, children }) => {
+            const match = /language-(\w+)/.exec(className || "");
+            const isBlock = !!className?.includes("language-") || (typeof children === "string" && children.includes("\n"));
+
+            if (!isBlock) {
+              return (
+                <code className="bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded px-1.5 py-0.5 text-xs font-mono">
+                  {children}
+                </code>
+              );
+            }
+
+            const language = match?.[1] || "";
+            const codeString = String(children).replace(/\n$/, "");
+
+            return <CodeBlock language={language} code={codeString} />;
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
 export default function SlackMessage({
   message,
   isUser,
@@ -75,15 +158,6 @@ export default function SlackMessage({
         })}
       </div>
 
-      {/* Tool calls — rendered before text since they execute first */}
-      {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-        <div className="mb-1">
-          {message.toolCalls.map((tc) => (
-            <ToolCallBlock key={tc.id} toolCall={tc} />
-          ))}
-        </div>
-      )}
-
       {/* Message content */}
       {isError ? (
         <div className="flex items-start gap-2 rounded-md border-l-4 border-red-500 bg-red-50 dark:bg-red-900/30 px-3 py-2 text-sm text-red-900 dark:text-red-400">
@@ -98,83 +172,29 @@ export default function SlackMessage({
         <div className="text-sm leading-relaxed text-zinc-900 dark:text-zinc-100 whitespace-pre-wrap">
           {renderMentions(message.content || "")}
         </div>
+      ) : message.contentBlocks && message.contentBlocks.length > 0 ? (
+        /* Interleaved content blocks — tool calls rendered in-place */
+        <>
+          {message.contentBlocks.map((block, i) =>
+            block.type === "tool_call" ? (
+              <ToolCallBlock key={block.toolCall.id} toolCall={block.toolCall} />
+            ) : (
+              <MarkdownBlock key={i} content={block.text} isStreaming={isStreaming} />
+            )
+          )}
+        </>
       ) : (
-        <div className="slack-markdown text-sm leading-relaxed text-zinc-900 dark:text-zinc-100">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkBreaks]}
-            components={{
-              h1: ({ children }) => (
-                <h1 className="text-base font-bold mt-4 mb-1.5 first:mt-0">{children}</h1>
-              ),
-              h2: ({ children }) => (
-                <h2 className="text-sm font-bold mt-4 mb-1.5 first:mt-0">{children}</h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="text-sm font-semibold mt-3 mb-1 first:mt-0">{children}</h3>
-              ),
-              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-              ul: ({ children }) => (
-                <ul className="list-disc pl-5 mb-2 last:mb-0 space-y-0.5">{children}</ul>
-              ),
-              ol: ({ children }) => (
-                <ol className="list-decimal pl-5 mb-2 last:mb-0 space-y-0.5">{children}</ol>
-              ),
-              li: ({ children }) => <li>{children}</li>,
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-600 underline hover:text-violet-800"
-                >
-                  {children}
-                </a>
-              ),
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-2 border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-800 pl-3 py-1 my-2 text-zinc-600 dark:text-zinc-400 italic">
-                  {children}
-                </blockquote>
-              ),
-              table: ({ children }) => (
-                <div className="overflow-x-auto my-2">
-                  <table className="min-w-full text-xs border-collapse">{children}</table>
-                </div>
-              ),
-              thead: ({ children }) => <thead className="bg-zinc-100 dark:bg-zinc-800">{children}</thead>,
-              th: ({ children }) => (
-                <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 font-semibold text-left">{children}</th>
-              ),
-              td: ({ children }) => (
-                <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">{children}</td>
-              ),
-              tr: ({ children }) => (
-                <tr className="even:bg-zinc-50 dark:even:bg-zinc-800">{children}</tr>
-              ),
-              hr: () => <hr className="my-3 border-zinc-200 dark:border-zinc-700" />,
-              strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-              pre: ({ children }) => <>{children}</>,
-              code: ({ className, children }) => {
-                const match = /language-(\w+)/.exec(className || "");
-                const isBlock = !!className?.includes("language-") || (typeof children === "string" && children.includes("\n"));
-
-                if (!isBlock) {
-                  return (
-                    <code className="bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded px-1.5 py-0.5 text-xs font-mono">
-                      {children}
-                    </code>
-                  );
-                }
-
-                const language = match?.[1] || "";
-                const codeString = String(children).replace(/\n$/, "");
-
-                return <CodeBlock language={language} code={codeString} />;
-              },
-            }}
-          >
-            {message.content || (isStreaming ? "" : "")}
-          </ReactMarkdown>
-        </div>
+        /* Legacy fallback: tool calls before text */
+        <>
+          {message.toolCalls && message.toolCalls.length > 0 && (
+            <div className="mb-1">
+              {message.toolCalls.map((tc) => (
+                <ToolCallBlock key={tc.id} toolCall={tc} />
+              ))}
+            </div>
+          )}
+          <MarkdownBlock content={message.content} isStreaming={isStreaming} />
+        </>
       )}
 
       {/* Image attachments for user messages — rendered below text */}
