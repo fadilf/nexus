@@ -1,8 +1,11 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
+import os from "os";
 import crypto from "crypto";
 import { NEXUS_DIR, DEFAULT_AGENTS, DEFAULT_AGENT_IDS } from "./config";
 import { Agent } from "./types";
+
+type Config = { agents: Agent[]; displayName?: string };
 
 function getConfigPath(workspaceDir: string): string {
   return path.join(workspaceDir, NEXUS_DIR, "config.json");
@@ -18,25 +21,52 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export async function loadAgents(workspaceDir: string): Promise<Agent[]> {
+async function loadConfig(workspaceDir: string): Promise<Config> {
   try {
     const raw = await readFile(getConfigPath(workspaceDir), "utf-8");
-    const config = JSON.parse(raw) as { agents: Agent[] };
-    return config.agents;
+    return JSON.parse(raw) as Config;
   } catch {
-    // Seed from defaults
     const agents = DEFAULT_AGENTS.map((a) => ({ ...a, isDefault: true }));
-    await saveAgents(workspaceDir, agents);
-    return agents;
+    const config: Config = { agents };
+    await saveConfig(workspaceDir, config);
+    return config;
   }
 }
 
-export async function saveAgents(workspaceDir: string, agents: Agent[]): Promise<void> {
+async function saveConfig(workspaceDir: string, config: Config): Promise<void> {
   return withLock(async () => {
     const dir = path.join(workspaceDir, NEXUS_DIR);
     await mkdir(dir, { recursive: true });
-    await writeFile(getConfigPath(workspaceDir), JSON.stringify({ agents }, null, 2));
+    await writeFile(getConfigPath(workspaceDir), JSON.stringify(config, null, 2));
   });
+}
+
+export async function loadAgents(workspaceDir: string): Promise<Agent[]> {
+  const config = await loadConfig(workspaceDir);
+  return config.agents;
+}
+
+export async function saveAgents(workspaceDir: string, agents: Agent[]): Promise<void> {
+  const config = await loadConfig(workspaceDir);
+  await saveConfig(workspaceDir, { ...config, agents });
+}
+
+export function getDefaultDisplayName(): string {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return "You";
+  }
+}
+
+export async function loadDisplayName(workspaceDir: string): Promise<string> {
+  const config = await loadConfig(workspaceDir);
+  return config.displayName || getDefaultDisplayName();
+}
+
+export async function saveDisplayName(workspaceDir: string, displayName: string): Promise<void> {
+  const config = await loadConfig(workspaceDir);
+  await saveConfig(workspaceDir, { ...config, displayName: displayName || undefined });
 }
 
 function validateAgentName(name: string): void {

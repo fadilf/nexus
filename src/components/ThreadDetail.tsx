@@ -15,6 +15,7 @@ export default function ThreadDetail({
   onRenameThread,
   isStreaming,
   allAgents,
+  displayName,
   isMobile,
   onBack,
 }: {
@@ -25,6 +26,7 @@ export default function ThreadDetail({
   onRenameThread?: (title: string) => void;
   isStreaming: boolean;
   allAgents?: Agent[];
+  displayName?: string;
   isMobile?: boolean;
   onBack?: () => void;
 }) {
@@ -163,6 +165,7 @@ export default function ThreadDetail({
         <MessageList
           messages={allMessages}
           agents={thread.agents}
+          displayName={displayName}
         />
       </div>
       <MessageInput

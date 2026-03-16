@@ -45,6 +45,8 @@ export default function SettingsDialog({
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const [displayName, setDisplayName] = useState("");
+  const [savedDisplayName, setSavedDisplayName] = useState("");
 
   const wsParam = workspaceId ? `?workspaceId=${workspaceId}` : "";
 
@@ -53,9 +55,34 @@ export default function SettingsDialog({
     if (res.ok) setAgents(await res.json());
   }, [wsParam]);
 
+  const fetchConfig = useCallback(async () => {
+    const res = await fetch(`/api/config${wsParam}`);
+    if (res.ok) {
+      const data = await res.json();
+      setDisplayName(data.displayName || "");
+      setSavedDisplayName(data.displayName || "");
+    }
+  }, [wsParam]);
+
   useEffect(() => {
-    if (open) fetchAgents();
-  }, [open, fetchAgents]);
+    if (open) {
+      fetchAgents();
+      fetchConfig();
+    }
+  }, [open, fetchAgents, fetchConfig]);
+
+  const handleSaveDisplayName = async () => {
+    const res = await fetch(`/api/config${wsParam}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setSavedDisplayName(data.displayName);
+      setDisplayName(data.displayName);
+    }
+  };
 
   if (!open) return null;
 
@@ -283,9 +310,9 @@ export default function SettingsDialog({
               </div>
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-6">
               {/* Theme toggle */}
-              <div className="flex items-center justify-between px-3 py-2.5 mb-3">
+              <div className="flex items-center justify-between px-3 py-2.5">
                 <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Theme</span>
                 {mounted && (
                   <button
@@ -297,8 +324,32 @@ export default function SettingsDialog({
                   </button>
                 )}
               </div>
-              <div className="border-b border-zinc-200 dark:border-zinc-700 mb-3" />
 
+              {/* Display Name */}
+              <div>
+                <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Display Name</h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Your name"
+                    className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                  {displayName !== savedDisplayName && (
+                    <button
+                      onClick={handleSaveDisplayName}
+                      className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-2 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
+                    >
+                      Save
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Shown next to your messages in chat</p>
+              </div>
+
+              {/* Agent Profiles */}
+              <div className="space-y-1">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Agent Profiles</h4>
                 <button
@@ -357,6 +408,7 @@ export default function SettingsDialog({
                   </div>
                 </div>
               ))}
+            </div>
             </div>
           )}
         </div>

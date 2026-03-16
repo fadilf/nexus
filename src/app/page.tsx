@@ -132,8 +132,9 @@ export default function Home() {
   }, [sidebarWidth]);
 
   const configUrl = activeWorkspaceId ? wsUrl("/api/config") : null;
-  const [config, , refetchConfig] = useFetch<{ agents: Agent[] }>(configUrl);
+  const [config, , refetchConfig] = useFetch<{ agents: Agent[]; displayName?: string }>(configUrl);
   const agents = config?.agents ?? [];
+  const displayName = config?.displayName ?? "You";
 
   const threadsUrl = activeWorkspaceId ? wsUrl("/api/threads") : null;
   const [threads, , refetchThreads] = useFetch<ThreadListItem[]>(threadsUrl);
@@ -340,6 +341,7 @@ export default function Home() {
       onRenameThread={handleRenameThread}
       isStreaming={isStreaming}
       allAgents={agents}
+      displayName={displayName}
       isMobile={isMobile}
       onBack={isMobile ? () => setSelectedThreadId(null) : undefined}
     />

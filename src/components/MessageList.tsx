@@ -30,9 +30,11 @@ export function groupMessages(messages: Message[]): MessageGroupData[] {
 export default function MessageList({
   messages,
   agents,
+  displayName,
 }: {
   messages: Message[];
   agents: Agent[];
+  displayName?: string;
 }) {
   const groups = groupMessages(messages);
 
@@ -54,6 +56,7 @@ export default function MessageList({
             agent={agent}
             isUser={isUser}
             isStreaming={isStreaming}
+            displayName={displayName}
           />
         );
       })}
