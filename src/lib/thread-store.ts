@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
-import { ENTOURAGE_DIR, THREADS_DIR, migrateFromNexus } from "./config";
+import { ENTOURAGE_DIR, THREADS_DIR } from "./config";
 import { Thread, Message, ThreadWithMessages, ThreadListItem, Agent } from "./types";
 import { getProcessManager } from "./process-manager";
 
@@ -27,7 +27,6 @@ function withLock<T>(threadId: string, fn: () => Promise<T>): Promise<T> {
 }
 
 export async function ensureEntourageDir(workspaceDir: string): Promise<void> {
-  await migrateFromNexus(workspaceDir);
   await mkdir(getThreadsDir(workspaceDir), { recursive: true });
 }
 
