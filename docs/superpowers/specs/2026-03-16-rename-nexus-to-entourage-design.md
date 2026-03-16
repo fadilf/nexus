@@ -22,7 +22,7 @@ Rename the project from "Nexus" to "Entourage" across the entire codebase — UI
 - Add migration function in `config.ts`:
   - On first access, if `.entourage/` doesn't exist but `.nexus/` does → `fs.rename()` (atomic move)
   - Same logic for `~/.nexus/workspaces.json` → `~/.entourage/workspaces.json` in `workspace-store.ts`
-- Update `.gitignore`: `.nexus` → `.entourage`
+- Add `.entourage` to `.gitignore` (`.nexus` is not currently gitignored — add both during transition)
 
 ### 2. Environment variable
 
@@ -45,7 +45,7 @@ Rename the project from "Nexus" to "Entourage" across the entire codebase — UI
 - All user-visible "Nexus" text → "Entourage"
 - `package.json` name field: `"nexus"` → `"entourage"`
 - `manifest.json` name/short_name: `"Nexus"` → `"Entourage"`
-- `layout.tsx` title and openGraph title: `"Nexus"` → `"Entourage"`
+- `layout.tsx` title and `appleWebApp.title`: `"Nexus"` → `"Entourage"`
 - `ThreadList.tsx` alt text and heading: `"Nexus"` → `"Entourage"`
 
 ### 5. Internal symbols
@@ -56,7 +56,7 @@ Rename the project from "Nexus" to "Entourage" across the entire codebase — UI
 
 ### 6. Documentation
 
-**Files:** `README.md`, `CLAUDE.md`, `ROADMAP.md`, `docs/superpowers/specs/*.md`
+**Files:** `README.md`, `CLAUDE.md`, `ROADMAP.md`, `docs/superpowers/**/*.md` (specs and plans)
 
 - All references to "Nexus" → "Entourage"
 - Update data flow diagram in `CLAUDE.md` (`.nexus/` paths → `.entourage/`)
@@ -67,6 +67,8 @@ Rename the project from "Nexus" to "Entourage" across the entire codebase — UI
 - **Repo folder name** (`/Users/fadil/Code/nexus`) — user handles this outside git
 - **Logo redesign** — separate effort, tracked in a different conversation
 - **Git remote/repo name** — user handles this on GitHub
+- **`.superpowers/brainstorm/*.html`** — generated artifacts, not worth updating
+- **`package-lock.json`** — regenerated automatically by `npm install` after `package.json` rename
 
 ## Migration details
 
@@ -95,6 +97,8 @@ export async function migrateFromNexus(baseDir: string): Promise<void> {
 ```
 
 This runs once per workspace directory and once for the home directory (`~/.nexus` → `~/.entourage`). The `fs.rename` call is atomic on the same filesystem.
+
+The migration should be called early — wired into `ensureEntourageDir()` so it runs before any data access. If the rename fails with `ENOENT` (e.g., another process already moved it), treat as success.
 
 ## Risk
 
