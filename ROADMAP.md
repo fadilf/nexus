@@ -13,3 +13,4 @@
 - [ ] Git worktree support — allow agents to work in isolated worktrees to avoid conflicts with the main working directory
 
 ## Long-term
+- [ ] Electron app — package Nexus as a native desktop application

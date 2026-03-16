@@ -42,7 +42,7 @@ function ContextMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[160px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg"
+      className="fixed z-50 min-w-[160px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg"
       style={{ left: x, top: y }}
     >
       {items.map((item) => (
@@ -52,7 +52,7 @@ function ContextMenu({
             item.onClick();
             onClose();
           }}
-          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
         >
           {item.icon}
           {item.label}
@@ -95,13 +95,13 @@ function ThreadItem({
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
       onContextMenu={onContextMenu}
-      className={`flex w-full gap-3 px-5 py-3.5 text-left transition-colors hover:bg-zinc-100 ${
-        isSelected ? "bg-zinc-100" : "cursor-pointer"
+      className={`flex w-full gap-3 px-5 py-3.5 text-left transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+        isSelected ? "bg-zinc-100 dark:bg-zinc-800" : "cursor-pointer"
       }`}
     >
       {agents.length <= 1 ? (
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800"
           style={agents[0] ? { border: `1.5px solid ${agents[0].avatarColor}`, boxShadow: `inset 0 2px 6px ${agents[0].avatarColor}80` } : undefined}
         >
           {agents[0] && (
@@ -128,7 +128,7 @@ function ThreadItem({
             return (
               <div
                 key={agent.id}
-                className="absolute flex items-center justify-center rounded-full bg-white"
+                className="absolute flex items-center justify-center rounded-full bg-white dark:bg-zinc-800"
                 style={{
                   width: size,
                   height: size,
@@ -151,7 +151,7 @@ function ThreadItem({
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-zinc-900">
+          <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
             {thread.title}
           </span>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -164,21 +164,21 @@ function ThreadItem({
             {(hasRunning || hasError) && (
               <AgentStatusBadge status={hasRunning ? "running" : "error"} />
             )}
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
               {formatDate(thread.updatedAt)}
             </span>
           </div>
         </div>
-        <span className="truncate text-xs text-zinc-500">
+        <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
           {thread.agents.map((a) => a.name).join(", ")}
         </span>
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-xs text-zinc-500">
+          <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
             {thread.lastMessagePreview}
           </span>
           <div className="flex shrink-0 items-center gap-1.5">
             {thread.messageCount > 0 && (
-              <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500">
+              <span className="shrink-0 rounded-full bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                 {thread.messageCount}
               </span>
             )}
@@ -188,7 +188,7 @@ function ThreadItem({
                   e.stopPropagation();
                   onOverflowMenu(e);
                 }}
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600"
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </button>
@@ -243,22 +243,22 @@ export default function ThreadList({
   };
 
   return (
-    <div className="flex h-full w-full flex-col border-r border-zinc-200">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+    <div className="flex h-full w-full flex-col border-r border-zinc-200 dark:border-zinc-700">
+      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="Nexus" className="h-7 w-7" />
-          <h1 className="text-lg font-semibold text-zinc-900">Nexus</h1>
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Nexus</h1>
         </div>
         <button
           onClick={onNewThread}
-          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800"
+          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
         >
           + New
         </button>
       </div>
       <div className="flex-1 overflow-y-auto">
         {activeThreads.length === 0 && archivedThreads.length === 0 && (
-          <div className="px-5 py-8 text-center text-sm text-zinc-400">
+          <div className="px-5 py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
             No threads yet. Create one to get started.
           </div>
         )}
@@ -276,10 +276,10 @@ export default function ThreadList({
           />
         ))}
         {archivedThreads.length > 0 && (
-          <div className="border-t border-zinc-100">
+          <div className="border-t border-zinc-100 dark:border-zinc-700">
             <button
               onClick={() => setShowArchived(!showArchived)}
-              className="flex w-full items-center gap-2 px-5 py-2.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50"
+              className="flex w-full items-center gap-2 px-5 py-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
             >
               <ChevronRight
                 className={`h-3.5 w-3.5 transition-transform ${showArchived ? "rotate-90" : ""}`}
@@ -304,10 +304,10 @@ export default function ThreadList({
           </div>
         )}
       </div>
-      <div className="border-t border-zinc-200 px-5 py-3">
+      <div className="border-t border-zinc-200 dark:border-zinc-700 px-5 py-3">
         <button
           onClick={onOpenSettings}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
           <Settings className="h-4 w-4" />
           Settings

@@ -132,8 +132,9 @@ export default function Home() {
   }, [sidebarWidth]);
 
   const configUrl = activeWorkspaceId ? wsUrl("/api/config") : null;
-  const [config, , refetchConfig] = useFetch<{ agents: Agent[] }>(configUrl);
+  const [config, , refetchConfig] = useFetch<{ agents: Agent[]; displayName?: string }>(configUrl);
   const agents = config?.agents ?? [];
+  const displayName = config?.displayName ?? "You";
 
   const threadsUrl = activeWorkspaceId ? wsUrl("/api/threads") : null;
   const [threads, , refetchThreads] = useFetch<ThreadListItem[]>(threadsUrl);
@@ -223,8 +224,8 @@ export default function Home() {
       await fetch(`/api/workspaces/${id}`, { method: "DELETE" });
       setWorkspaces((prev) => {
         const next = prev.filter((w) => w.id !== id);
-        if (activeWorkspaceId === id && next.length > 0) {
-          setActiveWorkspaceId(next[0].id);
+        if (activeWorkspaceId === id) {
+          setActiveWorkspaceId(next.length > 0 ? next[0].id : null);
           setSelectedThreadId(null);
         }
         return next;
@@ -340,14 +341,35 @@ export default function Home() {
       onRenameThread={handleRenameThread}
       isStreaming={isStreaming}
       allAgents={agents}
+      displayName={displayName}
       isMobile={isMobile}
       onBack={isMobile ? () => setSelectedThreadId(null) : undefined}
     />
   );
 
+  const handleWorkspaceAdded = useCallback((ws: { id: string; name: string; directory: string; color: string; addedAt: string }) => {
+    setWorkspaces((prev) => [...prev, ws]);
+    setActiveWorkspaceId(ws.id);
+    setSelectedThreadId(null);
+    setShowAddWorkspace(false);
+  }, []);
+
+  if (workspaces.length === 0) {
+    return (
+      <div className="flex h-screen overflow-hidden bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
+        <AddWorkspaceDialog
+          open
+          inline
+          onClose={() => {}}
+          onAdded={handleWorkspaceAdded}
+        />
+      </div>
+    );
+  }
+
   return (
     <WorkspaceProvider workspaceId={activeWorkspaceId}>
-    <div className="flex h-screen overflow-hidden bg-white text-zinc-900">
+    <div className="flex h-screen overflow-hidden bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
       {isMobile ? (
         selectedThreadId ? threadDetailEl : threadListEl
       ) : (
@@ -388,11 +410,7 @@ export default function Home() {
       <AddWorkspaceDialog
         open={showAddWorkspace}
         onClose={() => setShowAddWorkspace(false)}
-        onAdded={(ws) => {
-          setWorkspaces((prev) => [...prev, ws]);
-          setActiveWorkspaceId(ws.id);
-          setSelectedThreadId(null);
-        }}
+        onAdded={handleWorkspaceAdded}
       />
     </div>
     </WorkspaceProvider>

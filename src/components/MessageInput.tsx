@@ -70,7 +70,7 @@ export default function MessageInput({
     });
   }, []);
 
-  const uploadImages = async (images: PendingImage[]): Promise<MessageImage[]> => {
+  const uploadImages = useCallback(async (images: PendingImage[]): Promise<MessageImage[]> => {
     const formData = new FormData();
     for (const img of images) {
       formData.append("files", img.file);
@@ -78,7 +78,7 @@ export default function MessageInput({
     const res = await fetch(`/api/uploads${wsParam}`, { method: "POST", body: formData });
     if (!res.ok) throw new Error("Upload failed");
     return res.json();
-  };
+  }, [wsParam]);
 
   const handleSend = useCallback(async () => {
     if (!canSend) return;
@@ -102,7 +102,7 @@ export default function MessageInput({
     onSendMessage(content.trim(), images);
     setContent("");
     setShowMentions(false);
-  }, [canSend, content, pendingImages, onSendMessage]);
+  }, [canSend, content, pendingImages, onSendMessage, uploadImages]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -196,24 +196,24 @@ export default function MessageInput({
 
   return (
     <div
-      className={`relative border-t border-zinc-200 ${isMobile ? "px-4" : "px-6"} py-4 ${isDragOver ? "bg-violet-50" : ""}`}
+      className={`relative border-t border-zinc-200 dark:border-zinc-700 ${isMobile ? "px-4" : "px-6"} py-4 ${isDragOver ? "bg-violet-50 dark:bg-violet-900/20" : ""}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {isDragOver && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-violet-400 bg-violet-50/80">
-          <span className="text-sm font-medium text-violet-600">Drop images here</span>
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-violet-400 bg-violet-50/80 dark:bg-violet-900/40">
+          <span className="text-sm font-medium text-violet-600 dark:text-violet-400">Drop images here</span>
         </div>
       )}
 
       {showMentions && filteredAgents.length > 0 && (
-        <div className={`absolute bottom-full ${isMobile ? "left-4 right-4" : "left-6"} mb-1 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg`}>
+        <div className={`absolute bottom-full ${isMobile ? "left-4 right-4" : "left-6"} mb-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg`}>
           {filteredAgents.map((agent) => (
             <button
               key={agent.id}
               onClick={() => insertMention(agent)}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
             >
               <span
                 className="inline-flex h-5 w-5 items-center justify-center rounded-full"
@@ -230,7 +230,7 @@ export default function MessageInput({
               </span>
               {agent.name}
               {!threadAgentIds.has(agent.id) && (
-                <span className="ml-auto pl-3 text-xs text-zinc-400">+ add to thread</span>
+                <span className="ml-auto pl-3 text-xs text-zinc-400 dark:text-zinc-500">+ add to thread</span>
               )}
             </button>
           ))}
@@ -244,7 +244,7 @@ export default function MessageInput({
               <img
                 src={img.preview}
                 alt={img.file.name}
-                className="h-16 w-16 rounded-lg border border-zinc-200 object-cover"
+                className="h-16 w-16 rounded-lg border border-zinc-200 dark:border-zinc-700 object-cover"
               />
               <button
                 onClick={() => removeImage(i)}
@@ -272,7 +272,7 @@ export default function MessageInput({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
-          className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50"
+          className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 disabled:opacity-50"
           title="Attach images"
         >
           <Paperclip className="h-5 w-5" />
@@ -288,10 +288,10 @@ export default function MessageInput({
             placeholder={`Message ${agents.map((a) => a.name).join(", ")}... (@ to mention)`}
             disabled={disabled}
             rows={1}
-            className={`w-full resize-none rounded-lg border bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none disabled:opacity-50 ${
+            className={`w-full resize-none rounded-lg border bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none disabled:opacity-50 ${
               isListening
                 ? "border-violet-500 ring-1 ring-violet-500"
-                : "border-zinc-200 focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                : "border-zinc-200 dark:border-zinc-700 focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
             }`}
             style={{
               maxHeight: "120px",
@@ -314,7 +314,7 @@ export default function MessageInput({
                   ? "bg-red-500 text-white"
                   : isListening
                     ? "animate-pulse bg-red-500 text-white"
-                    : "bg-zinc-100 text-zinc-400 hover:border-violet-500 hover:text-violet-500 border border-transparent"
+                    : "bg-zinc-100 dark:bg-zinc-700 text-zinc-400 hover:border-violet-500 hover:text-violet-500 border border-transparent"
               } disabled:opacity-50`}
               title={isListening ? "Stop voice input" : "Start voice input"}
             >
@@ -338,7 +338,7 @@ export default function MessageInput({
           <button
             onClick={handleSend}
             disabled={!canSend}
-            className="shrink-0 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
           >
             {uploading ? "Uploading..." : "Send"}
           </button>

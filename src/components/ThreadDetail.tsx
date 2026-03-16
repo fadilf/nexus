@@ -3,14 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ThreadWithMessages, Agent, Message, MessageImage } from "@/lib/types";
 import { ChevronLeft, Pencil } from "lucide-react";
-import MessageBubble from "./MessageBubble";
+import MessageList from "./MessageList";
 import ModelIcon from "./ModelIcon";
 import MessageInput from "./MessageInput";
-
-function resolveAgent(message: Message, agents: Agent[]): Agent | undefined {
-  if (message.role === "user") return undefined;
-  return agents.find((a) => a.id === message.agentId);
-}
 
 export default function ThreadDetail({
   thread,
@@ -20,16 +15,18 @@ export default function ThreadDetail({
   onRenameThread,
   isStreaming,
   allAgents,
+  displayName,
   isMobile,
   onBack,
 }: {
   thread: ThreadWithMessages | null;
-  streamingMessages: Map<string, { agentId: string; content: string }>;
+  streamingMessages: Map<string, { agentId: string; content: string; toolCalls?: import("@/lib/types").ToolCall[] }>;
   onSendMessage: (content: string, images?: MessageImage[]) => void;
   onStop: (agentId: string) => void;
   onRenameThread?: (title: string) => void;
   isStreaming: boolean;
   allAgents?: Agent[];
+  displayName?: string;
   isMobile?: boolean;
   onBack?: () => void;
 }) {
@@ -64,7 +61,7 @@ export default function ThreadDetail({
 
   if (!thread) {
     return (
-      <div className="flex flex-1 items-center justify-center text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-zinc-400 dark:text-zinc-500">
         Select a thread to view
       </div>
     );
@@ -80,6 +77,7 @@ export default function ThreadDetail({
       content: data.content,
       timestamp: new Date().toISOString(),
       status: "streaming" as const,
+      ...(data.toolCalls?.length ? { toolCalls: data.toolCalls } : {}),
     })
   );
 
@@ -87,12 +85,12 @@ export default function ThreadDetail({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className={`border-b border-zinc-200 ${isMobile ? "px-4" : "px-6"} py-4`}>
+      <div className={`border-b border-zinc-200 dark:border-zinc-700 ${isMobile ? "px-4" : "px-6"} py-4`}>
         <div className="flex items-center gap-2">
           {onBack && (
             <button
               onClick={onBack}
-              className="shrink-0 -ml-1 rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+              className="shrink-0 -ml-1 rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -116,12 +114,12 @@ export default function ThreadDetail({
                   setIsEditingTitle(false);
                 }
               }}
-              className="w-full rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-500"
+              className="w-full rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-zinc-400"
             />
           ) : (
             <>
               <h2
-                className={`text-sm font-medium text-zinc-900 ${isMobile ? "truncate" : "cursor-pointer hover:text-zinc-600"}`}
+                className={`text-sm font-medium text-zinc-900 dark:text-zinc-100 ${isMobile ? "truncate" : "cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300"}`}
                 onDoubleClick={isMobile ? undefined : () => {
                   setEditTitle(thread.title);
                   setIsEditingTitle(true);
@@ -138,7 +136,7 @@ export default function ThreadDetail({
                     setIsEditingTitle(true);
                     setTimeout(() => titleInputRef.current?.select(), 0);
                   }}
-                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -150,36 +148,26 @@ export default function ThreadDetail({
           {thread.agents.map((agent) => (
             <span
               key={agent.id}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs"
+              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs dark:bg-zinc-800"
             >
               <span
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-100"
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800"
                 style={{ border: `1.5px solid ${agent.avatarColor}`, boxShadow: `inset 0 1px 4px ${agent.avatarColor}80` }}
               >
                 <ModelIcon model={agent.model} icon={agent.icon} className="h-2.5 w-2.5" />
               </span>
-              <span className="text-zinc-700">{agent.name}</span>
-              <span className="text-zinc-500">· {agent.model}</span>
+              <span className="text-zinc-700 dark:text-zinc-300">{agent.name}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">· {agent.model}</span>
             </span>
           ))}
         </div>
       </div>
-      <div ref={scrollRef} className={`flex flex-1 flex-col gap-4 overflow-y-auto ${isMobile ? "px-4" : "px-6"} py-5`}>
-        {allMessages.map((message) => {
-          const agent = resolveAgent(message, thread.agents);
-          return (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              isOwn={message.role === "user"}
-              agentName={agent?.name}
-              avatarColor={agent?.avatarColor}
-              model={agent?.model}
-              icon={agent?.icon}
-              isMobile={isMobile}
-            />
-          );
-        })}
+      <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto py-2">
+        <MessageList
+          messages={allMessages}
+          agents={thread.agents}
+          displayName={displayName}
+        />
       </div>
       <MessageInput
         key={thread.id}
