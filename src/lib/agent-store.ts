@@ -56,7 +56,17 @@ async function loadConfig(): Promise<Config> {
   await migrateIfNeeded();
   try {
     const raw = await readFile(GLOBAL_CONFIG_PATH, "utf-8");
-    return JSON.parse(raw) as Config;
+    const config = JSON.parse(raw) as Config;
+
+    // Merge in any new default agents that were added since config was created
+    const existingIds = new Set(config.agents.map((a) => a.id));
+    const missing = DEFAULT_AGENTS.filter((a) => !existingIds.has(a.id));
+    if (missing.length > 0) {
+      config.agents.push(...missing.map((a) => ({ ...a, isDefault: true })));
+      await saveConfig(config);
+    }
+
+    return config;
   } catch {
     const agents = DEFAULT_AGENTS.map((a) => ({ ...a, isDefault: true }));
     const config: Config = { agents };
