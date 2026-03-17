@@ -196,7 +196,7 @@ export default function ThreadDetail({
           onClose={() => setRewindMenu(null)}
           items={[
             {
-              label: isStreaming ? "Rewind to here (wait for response)" : "Rewind to here",
+              label: "Rewind to here",
               icon: <RotateCcw className="h-4 w-4" />,
               onClick: () => setRewindConfirm(rewindMenu.messageId),
               disabled: isStreaming,
