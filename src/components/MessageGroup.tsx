@@ -22,17 +22,28 @@ export default function MessageGroup({
   isUser,
   isStreaming,
   displayName = "You",
+  onRewind,
 }: {
   group: MessageGroupData;
   agent?: Agent;
   isUser: boolean;
   isStreaming: boolean;
   displayName?: string;
+  onRewind?: (messageId: string, x: number, y: number) => void;
 }) {
   const firstMessage = group.messages[0];
+  const lastMessage = group.messages[group.messages.length - 1];
 
   return (
-    <div className="border-b border-zinc-100 dark:border-zinc-800 py-2 last:border-b-0">
+    <div
+      className="border-b border-zinc-100 dark:border-zinc-800 py-2 last:border-b-0"
+      onContextMenu={(e) => {
+        if (onRewind) {
+          e.preventDefault();
+          onRewind(lastMessage.id, e.clientX, e.clientY);
+        }
+      }}
+    >
       {/* Group header with avatar */}
       <div className="flex gap-3 px-5">
         {/* Avatar */}
