@@ -23,8 +23,11 @@ export const metadata: Metadata = {
   title: "Entourage",
   description: "Thread-based messaging client",
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: [
+      { url: "/logo-light.svg", type: "image/svg+xml" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: "/logo-light.svg",
   },
   manifest: "/manifest.json",
   appleWebApp: {
