@@ -1,15 +1,16 @@
 export type AgentModel = "claude" | "gemini";
 
-export type AgentIcon =
+export type Icon =
   | { type: "lucide"; name: string }
-  | { type: "emoji"; value: string };
+  | { type: "emoji"; value: string }
+  | { type: "image"; imageId: string; ext: string };
 
 export type Agent = {
   id: string;
   name: string;
   model: AgentModel;
   avatarColor: string;
-  icon?: AgentIcon;
+  icon?: Icon;
   personality?: string;
   isDefault?: boolean;
 };
@@ -76,4 +77,5 @@ export type Workspace = {
   directory: string;
   color: string;
   addedAt: string;
+  icon?: Icon;
 };

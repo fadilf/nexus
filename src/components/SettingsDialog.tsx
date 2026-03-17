@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Agent, AgentModel, AgentIcon } from "@/lib/types";
+import { Agent, AgentModel, Icon } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import IconPicker from "./IconPicker";
 import { ArrowLeft, Pencil, Trash2, Sun, Moon } from "lucide-react";
@@ -11,7 +11,7 @@ type AgentFormData = {
   name: string;
   model: AgentModel;
   avatarColor: string;
-  icon?: AgentIcon;
+  icon?: Icon;
   personality?: string;
 };
 

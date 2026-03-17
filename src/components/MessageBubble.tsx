@@ -1,6 +1,6 @@
 "use client";
 
-import { AgentModel, AgentIcon, Message } from "@/lib/types";
+import { AgentModel, Icon, Message } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -46,7 +46,7 @@ export default function MessageBubble({
   agentName?: string;
   avatarColor?: string;
   model?: AgentModel;
-  icon?: AgentIcon;
+  icon?: Icon;
 }) {
   const wsParam = useWsParam();
   const avatar = (

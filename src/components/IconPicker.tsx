@@ -9,7 +9,7 @@ import {
   Camera, Microscope, Telescope, Beaker, Atom, Binary, CircuitBoard, Cog,
   Crown, Diamond, Flame, Gem, Leaf, Mountain, Skull, Swords,
 } from "lucide-react";
-import type { AgentIcon } from "@/lib/types";
+import type { Icon } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -23,9 +23,12 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 const ICON_NAMES = Object.keys(ICON_MAP);
 
-export function renderAgentIcon(icon: AgentIcon, className: string = "h-4 w-4") {
+export function renderIcon(icon: Icon, className: string = "h-4 w-4") {
   if (icon.type === "emoji") {
     return <span className={className} style={{ fontSize: "1em", lineHeight: 1 }}>{icon.value}</span>;
+  }
+  if (icon.type === "image") {
+    return <img src={`/api/workspace-icons/${icon.imageId}?ext=${icon.ext}`} alt="" className={`${className} rounded-full object-cover`} />;
   }
   const IconComponent = ICON_MAP[icon.name];
   if (!IconComponent) return <Bot className={className} />;
@@ -36,8 +39,8 @@ export default function IconPicker({
   value,
   onChange,
 }: {
-  value?: AgentIcon;
-  onChange: (icon: AgentIcon) => void;
+  value?: Icon;
+  onChange: (icon: Icon) => void;
 }) {
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState<"lucide" | "emoji">(value?.type === "emoji" ? "emoji" : "lucide");
@@ -81,7 +84,7 @@ export default function IconPicker({
           />
           <div className="grid max-h-[160px] grid-cols-6 md:grid-cols-8 gap-1 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-600 p-2">
             {filtered.map((name) => {
-              const Icon = ICON_MAP[name];
+              const LucideComp = ICON_MAP[name];
               const isSelected = value?.type === "lucide" && value.name === name;
               return (
                 <button
@@ -95,7 +98,7 @@ export default function IconPicker({
                       : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <LucideComp className="h-4 w-4" />
                 </button>
               );
             })}

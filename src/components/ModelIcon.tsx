@@ -1,5 +1,5 @@
-import { AgentModel, AgentIcon } from "@/lib/types";
-import { renderAgentIcon } from "./IconPicker";
+import { AgentModel, Icon } from "@/lib/types";
+import { renderIcon } from "./IconPicker";
 
 const iconPaths: Record<AgentModel, string> = {
   claude: "/agent-icons/Claude_AI_symbol.svg",
@@ -12,11 +12,11 @@ export default function ModelIcon({
   className = "h-4 w-4",
 }: {
   model: AgentModel;
-  icon?: AgentIcon;
+  icon?: Icon;
   className?: string;
 }) {
   if (icon) {
-    return renderAgentIcon(icon, className);
+    return renderIcon(icon, className);
   }
 
   return (
