@@ -27,6 +27,8 @@ const emptyForm: AgentFormData = {
   avatarColor: "#8b5cf6",
 };
 
+type Tab = "general" | "agents";
+
 export default function SettingsDialog({
   open,
   onClose,
@@ -34,6 +36,7 @@ export default function SettingsDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const [tab, setTab] = useState<Tab>("general");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -173,27 +176,46 @@ export default function SettingsDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="flex w-full max-w-2xl flex-col rounded-xl bg-white dark:bg-zinc-800 shadow-xl mx-4" style={{ maxHeight: "85vh" }}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 px-4 md:px-6 py-4">
-          <div className="flex items-center gap-3">
-            {showForm && (
-              <button onClick={cancelForm} className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-            )}
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {showForm
-                ? editingAgent
-                  ? `Edit ${editingAgent.name}`
-                  : "New Agent"
-                : "Settings"}
-            </h3>
+        <div className="border-b border-zinc-200 dark:border-zinc-700 px-4 md:px-6">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              {showForm && (
+                <button onClick={cancelForm} className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                {showForm
+                  ? editingAgent
+                    ? `Edit ${editingAgent.name}`
+                    : "New Agent"
+                  : "Settings"}
+              </h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 text-xl leading-none"
+            >
+              &times;
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 text-xl leading-none"
-          >
-            &times;
-          </button>
+          {!showForm && (
+            <div className="flex gap-1 -mb-px">
+              {([["general", "General"], ["agents", "Agent Profiles"]] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => { setTab(key); setError(""); }}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    tab === key
+                      ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
+                      : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -305,7 +327,7 @@ export default function SettingsDialog({
                 </button>
               </div>
             </div>
-          ) : (
+          ) : tab === "general" ? (
             <div className="space-y-6">
               {/* Theme toggle */}
               <div className="flex items-center justify-between px-3 py-2.5">
@@ -322,30 +344,29 @@ export default function SettingsDialog({
               </div>
 
               {/* Display Name */}
-              <div>
-                <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Display Name</h4>
-                <div className="flex gap-2">
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Display Name</span>
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your name"
-                    className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-48 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
                   />
                   {displayName !== savedDisplayName && (
                     <button
                       onClick={handleSaveDisplayName}
-                      className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-2 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
+                      className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
                     >
                       Save
                     </button>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Shown next to your messages in chat</p>
               </div>
-
-              {/* Agent Profiles */}
-              <div className="space-y-1">
+            </div>
+          ) : (
+            <div className="space-y-1">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Agent Profiles</h4>
                 <button
@@ -404,7 +425,6 @@ export default function SettingsDialog({
                   </div>
                 </div>
               ))}
-            </div>
             </div>
           )}
         </div>
