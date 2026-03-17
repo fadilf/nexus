@@ -127,20 +127,28 @@ export default function WorkspaceBar({
                 className="w-10 h-10 rounded-xl text-xs text-center bg-zinc-700 text-white border border-zinc-500 outline-none ml-3"
               />
             ) : (
-              <button
-                ref={(el) => { if (el) wsButtonRefs.current.set(ws.id, el); }}
-                onClick={() => onSelectWorkspace(ws.id)}
-                onContextMenu={(e) => handleContextMenu(e, ws.id)}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold text-white ml-3 transition-all duration-200 ${
-                  isActive
-                    ? "rounded-2xl shadow-lg shadow-black/30 scale-105"
-                    : "hover:rounded-2xl hover:brightness-110"
-                }`}
-                style={{ backgroundColor: ws.color }}
-                title={`${ws.name}\n${ws.directory}`}
-              >
-                {ws.icon ? renderIcon(ws.icon, "h-5 w-5") : getInitials(ws.name)}
-              </button>
+              <>
+                <button
+                  ref={(el) => { if (el) wsButtonRefs.current.set(ws.id, el); }}
+                  onClick={() => onSelectWorkspace(ws.id)}
+                  onContextMenu={(e) => handleContextMenu(e, ws.id)}
+                  className={`peer w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold text-white ml-3 transition-all duration-200 ${
+                    isActive
+                      ? "rounded-2xl shadow-lg shadow-black/30 scale-105"
+                      : "hover:rounded-2xl hover:brightness-110"
+                  }`}
+                  style={{ backgroundColor: ws.color }}
+                >
+                  {ws.icon ? renderIcon(ws.icon, "h-5 w-5") : getInitials(ws.name)}
+                </button>
+                {/* Tooltip */}
+                <div className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 opacity-0 peer-hover:opacity-100 transition-opacity duration-150 z-50">
+                  <div className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                    <div className="text-sm font-medium text-white">{ws.name}</div>
+                    <div className="text-xs text-zinc-400 mt-0.5">{ws.directory}</div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         );
