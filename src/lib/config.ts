@@ -59,6 +59,6 @@ export function getCliCommand(model: string, prompt: string, sessionId: string, 
 
   return {
     cmd: "gemini",
-    args: ["-p", effectivePrompt, "--output-format", "stream-json", "--sandbox=none"],
+    args: ["-p", effectivePrompt, "--output-format", "stream-json", "--yolo"],
   };
 }

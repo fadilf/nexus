@@ -22,14 +22,14 @@ export default function MessageGroup({
   isUser,
   isStreaming,
   displayName = "You",
-  onRewind,
+  onContextMenu,
 }: {
   group: MessageGroupData;
   agent?: Agent;
   isUser: boolean;
   isStreaming: boolean;
   displayName?: string;
-  onRewind?: (messageId: string, x: number, y: number) => void;
+  onContextMenu?: (messageId: string, groupText: string, x: number, y: number) => void;
 }) {
   const firstMessage = group.messages[0];
   const lastMessage = group.messages[group.messages.length - 1];
@@ -38,9 +38,10 @@ export default function MessageGroup({
     <div
       className="border-b border-zinc-100 dark:border-zinc-800 py-2 last:border-b-0"
       onContextMenu={(e) => {
-        if (onRewind) {
+        if (onContextMenu) {
           e.preventDefault();
-          onRewind(lastMessage.id, e.clientX, e.clientY);
+          const groupText = group.messages.map((m) => m.content).join("\n\n");
+          onContextMenu(lastMessage.id, groupText, e.clientX, e.clientY);
         }
       }}
     >

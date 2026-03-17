@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThreadWithMessages, Agent, Message, MessageImage } from "@/lib/types";
-import { ChevronLeft, Pencil, RotateCcw } from "lucide-react";
+import { ChevronLeft, Copy, Pencil, RotateCcw } from "lucide-react";
 import MessageList from "./MessageList";
 import ModelIcon from "./ModelIcon";
 import MessageInput from "./MessageInput";
@@ -38,7 +38,7 @@ export default function ThreadDetail({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const [rewindMenu, setRewindMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string; groupText: string } | null>(null);
   const [rewindConfirm, setRewindConfirm] = useState<string | null>(null);
 
   useEffect(() => {
@@ -64,8 +64,8 @@ export default function ThreadDetail({
     }
   }, [thread?.messages.length, streamingContentKey]);
 
-  const handleRewindRequest = useCallback((messageId: string, x: number, y: number) => {
-    setRewindMenu({ x, y, messageId });
+  const handleContextMenu = useCallback((messageId: string, groupText: string, x: number, y: number) => {
+    setContextMenu({ x, y, messageId, groupText });
   }, []);
 
   if (!thread) {
@@ -177,7 +177,7 @@ export default function ThreadDetail({
           messages={allMessages}
           agents={thread.agents}
           displayName={displayName}
-          onRewind={handleRewindRequest}
+          onContextMenu={handleContextMenu}
         />
       </div>
       <MessageInput
@@ -189,16 +189,21 @@ export default function ThreadDetail({
         disabled={isStreaming}
         isMobile={isMobile}
       />
-      {rewindMenu && (
+      {contextMenu && (
         <ContextMenu
-          x={rewindMenu.x}
-          y={rewindMenu.y}
-          onClose={() => setRewindMenu(null)}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
           items={[
+            {
+              label: "Copy message",
+              icon: <Copy className="h-4 w-4" />,
+              onClick: () => navigator.clipboard.writeText(contextMenu.groupText),
+            },
             {
               label: "Rewind to here",
               icon: <RotateCcw className="h-4 w-4" />,
-              onClick: () => setRewindConfirm(rewindMenu.messageId),
+              onClick: () => setRewindConfirm(contextMenu.messageId),
               disabled: isStreaming,
             },
           ]}

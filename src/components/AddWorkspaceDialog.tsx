@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import DirectoryBrowser from "./DirectoryBrowser";
 
 const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#84cc16"];
 
@@ -77,14 +78,7 @@ export default function AddWorkspaceDialog({ open, onClose, onAdded, inline }: P
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
             Project Directory
           </label>
-          <input
-            type="text"
-            value={directory}
-            onChange={(e) => setDirectory(e.target.value)}
-            placeholder="/Users/you/Code/project"
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-            autoFocus
-          />
+          <DirectoryBrowser value={directory} onChange={setDirectory} />
         </div>
 
         <div>

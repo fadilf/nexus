@@ -31,12 +31,12 @@ export default function MessageList({
   messages,
   agents,
   displayName,
-  onRewind,
+  onContextMenu,
 }: {
   messages: Message[];
   agents: Agent[];
   displayName?: string;
-  onRewind?: (messageId: string, x: number, y: number) => void;
+  onContextMenu?: (messageId: string, groupText: string, x: number, y: number) => void;
 }) {
   const groups = groupMessages(messages);
 
@@ -59,7 +59,7 @@ export default function MessageList({
             isUser={isUser}
             isStreaming={isStreaming}
             displayName={displayName}
-            onRewind={onRewind}
+            onContextMenu={onContextMenu}
           />
         );
       })}

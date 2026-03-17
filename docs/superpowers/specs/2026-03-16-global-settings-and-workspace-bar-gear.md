@@ -43,11 +43,11 @@ The WorkspaceBar is not rendered on mobile. To preserve settings access, add a g
 
 ### Global config location
 
-Global config is stored at `~/.nexus/config.json` (alongside the existing `~/.nexus/workspaces.json`). This cleanly separates global config from per-workspace thread data.
+Global config is stored at `~/.entourage/config.json` (alongside the existing `~/.entourage/workspaces.json`). This cleanly separates global config from per-workspace thread data.
 
 ### agent-store.ts changes
 
-- `loadAgents()`, `saveAgents()`, `loadDisplayName()`, `saveDisplayName()` — remove the `workspaceDir` parameter. Instead, resolve to `~/.nexus/config.json` via a new `resolveGlobalConfigDir()` helper (returns `~/.nexus/`).
+- `loadAgents()`, `saveAgents()`, `loadDisplayName()`, `saveDisplayName()` — remove the `workspaceDir` parameter. Instead, resolve to `~/.entourage/config.json` via a new `resolveGlobalConfigDir()` helper (returns `~/.entourage/`).
 - All callers updated to call without `workspaceDir`.
 
 ### API route changes
@@ -76,12 +76,12 @@ The `/api/config` and `/api/agents` routes no longer need `resolveWorkspaceDir` 
 
 ### Migration
 
-Integrate migration into `resolveGlobalConfigDir()` itself: when `~/.nexus/config.json` does not exist, scan `~/.nexus/workspaces.json` for the first workspace entry that has a `.nexus/config.json` and copy it as the global config. This avoids race conditions with `loadConfig`'s default-config-creation fallback. Old per-workspace config files are left in place (they'll just be ignored).
+Integrate migration into `resolveGlobalConfigDir()` itself: when `~/.entourage/config.json` does not exist, scan `~/.entourage/workspaces.json` for the first workspace entry that has a `.entourage/config.json` and copy it as the global config. This avoids race conditions with `loadConfig`'s default-config-creation fallback. Old per-workspace config files are left in place (they'll just be ignored).
 
 ### What stays workspace-scoped
 
-- Threads remain workspace-scoped (each workspace has its own threads in `<workspaceDir>/.nexus/threads/`)
-- Workspace metadata (name, color, directory) remains per-workspace in `~/.nexus/workspaces.json`
+- Threads remain workspace-scoped (each workspace has its own threads in `<workspaceDir>/.entourage/threads/`)
+- Workspace metadata (name, color, directory) remains per-workspace in `~/.entourage/workspaces.json`
 
 ## Files to Change
 

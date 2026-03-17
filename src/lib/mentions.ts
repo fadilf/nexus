@@ -1,5 +1,16 @@
 import { Agent } from "./types";
 
+/**
+ * Replace @mentions with just the agent name (e.g. "@gemini" → "gemini").
+ * Mentions are routing metadata, not content for the model.
+ */
+export function stripMentions(content: string, agents: Agent[]): string {
+  return content.replace(/@(\w+)/g, (match, name) => {
+    const agent = agents.find((a) => a.name.toLowerCase() === name.toLowerCase());
+    return agent ? agent.name : match;
+  });
+}
+
 export function parseMentions(content: string, agents: Agent[]): Agent[] {
   const mentionPattern = /@(\w+)/g;
   const mentioned: Agent[] = [];

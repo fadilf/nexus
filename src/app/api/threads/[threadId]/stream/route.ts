@@ -5,6 +5,7 @@ import { createStreamParser } from "@/lib/stream-parser";
 import { AgentModel, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
 import { loadAgents } from "@/lib/agent-store";
 import { buildContextualPrompt, buildFullHistoryPrompt } from "@/lib/context";
+import { stripMentions } from "@/lib/mentions";
 import path from "path";
 import { getUploadsDir } from "@/lib/config";
 import { resolveWorkspaceDir } from "@/lib/workspace-context";
@@ -119,10 +120,11 @@ export async function POST(
     (m) => m.role === "assistant" && m.agentId === agent.id && m.status === "complete"
   );
 
-  const enrichedPrompt = buildContextualPrompt(thread.messages, agent.id, thread.agents, prompt);
+  const cleanPrompt = stripMentions(prompt, thread.agents);
+  const enrichedPrompt = buildContextualPrompt(thread.messages, agent.id, thread.agents, cleanPrompt);
   // Build full history prompt for fallback when --resume fails (session lost)
   const fullHistoryPrompt = hasHistory
-    ? buildFullHistoryPrompt(thread.messages, agent.id, thread.agents, prompt)
+    ? buildFullHistoryPrompt(thread.messages, agent.id, thread.agents, cleanPrompt)
     : undefined;
 
   let accumulatedContent = "";
