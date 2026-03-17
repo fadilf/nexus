@@ -131,7 +131,7 @@ export default function Home() {
     localStorage.setItem("entourage-sidebar-width", String(sidebarWidth));
   }, [sidebarWidth]);
 
-  const configUrl = activeWorkspaceId ? wsUrl("/api/config") : null;
+  const configUrl = "/api/config";
   const [config, , refetchConfig] = useFetch<{ agents: Agent[]; displayName?: string }>(configUrl);
   const agents = config?.agents ?? [];
   const displayName = config?.displayName ?? "You";
@@ -422,7 +422,6 @@ export default function Home() {
           setShowSettings(false);
           refetchConfig();
         }}
-        workspaceId={activeWorkspaceId}
       />
       <AddWorkspaceDialog
         open={showAddWorkspace}

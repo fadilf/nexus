@@ -30,11 +30,9 @@ const emptyForm: AgentFormData = {
 export default function SettingsDialog({
   open,
   onClose,
-  workspaceId,
 }: {
   open: boolean;
   onClose: () => void;
-  workspaceId?: string | null;
 }) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
@@ -48,21 +46,19 @@ export default function SettingsDialog({
   const [displayName, setDisplayName] = useState("");
   const [savedDisplayName, setSavedDisplayName] = useState("");
 
-  const wsParam = workspaceId ? `?workspaceId=${workspaceId}` : "";
-
   const fetchAgents = useCallback(async () => {
-    const res = await fetch(`/api/agents${wsParam}`);
+    const res = await fetch(`/api/agents`);
     if (res.ok) setAgents(await res.json());
-  }, [wsParam]);
+  }, []);
 
   const fetchConfig = useCallback(async () => {
-    const res = await fetch(`/api/config${wsParam}`);
+    const res = await fetch(`/api/config`);
     if (res.ok) {
       const data = await res.json();
       setDisplayName(data.displayName || "");
       setSavedDisplayName(data.displayName || "");
     }
-  }, [wsParam]);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -72,7 +68,7 @@ export default function SettingsDialog({
   }, [open, fetchAgents, fetchConfig]);
 
   const handleSaveDisplayName = async () => {
-    const res = await fetch(`/api/config${wsParam}`, {
+    const res = await fetch(`/api/config`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ displayName }),
@@ -137,13 +133,13 @@ export default function SettingsDialog({
 
       let res: Response;
       if (editingAgent) {
-        res = await fetch(`/api/agents/${editingAgent.id}${wsParam}`, {
+        res = await fetch(`/api/agents/${editingAgent.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
       } else {
-        res = await fetch(`/api/agents${wsParam}`, {
+        res = await fetch(`/api/agents`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -164,7 +160,7 @@ export default function SettingsDialog({
   };
 
   const handleDelete = async (agent: Agent) => {
-    const res = await fetch(`/api/agents/${agent.id}${wsParam}`, { method: "DELETE" });
+    const res = await fetch(`/api/agents/${agent.id}`, { method: "DELETE" });
     if (res.ok) {
       await fetchAgents();
     } else {
