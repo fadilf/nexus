@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { Paperclip, X, Mic, Square } from "lucide-react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { Agent, MessageImage } from "@/lib/types";
+import ModelIcon from "./ModelIcon";
 import { useWsParam } from "@/contexts/WorkspaceContext";
 
 type PendingImage = {
@@ -222,11 +223,7 @@ export default function MessageInput({
                   boxShadow: `inset 0 1px 4px ${agent.avatarColor}80`,
                 }}
               >
-                <img
-                  src={`/agent-icons/${agent.model === "claude" ? "Claude_AI_symbol" : "Google_Gemini_icon_2025"}.svg`}
-                  alt={agent.model}
-                  className="h-3 w-3"
-                />
+                <ModelIcon model={agent.model} icon={agent.icon} className="h-3 w-3" />
               </span>
               {agent.name}
               {!threadAgentIds.has(agent.id) && (
