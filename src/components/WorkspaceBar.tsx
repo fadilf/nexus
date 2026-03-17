@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Pencil, Trash2, FolderOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderOpen, Settings } from "lucide-react";
 import { Workspace } from "@/lib/types";
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
   onAddWorkspace: () => void;
   onRemoveWorkspace: (id: string) => void;
   onEditWorkspace: (id: string, updates: { name?: string; color?: string }) => void;
+  onOpenSettings: () => void;
 };
 
 export default function WorkspaceBar({
@@ -21,6 +22,7 @@ export default function WorkspaceBar({
   onAddWorkspace,
   onRemoveWorkspace,
   onEditWorkspace,
+  onOpenSettings,
 }: Props) {
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -67,6 +69,18 @@ export default function WorkspaceBar({
 
   return (
     <div className="flex flex-col items-center w-16 bg-zinc-900 py-3 gap-2 flex-shrink-0">
+      {/* Settings gear */}
+      <button
+        onClick={onOpenSettings}
+        className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors ml-3"
+        title="Settings"
+      >
+        <Settings size={20} />
+      </button>
+
+      {/* Separator */}
+      <div className="w-8 h-px bg-zinc-700 my-1" />
+
       {workspaces.map((ws) => {
         const isActive = ws.id === activeWorkspaceId;
         return (

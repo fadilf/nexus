@@ -172,7 +172,7 @@ export default function ThreadList({
   selectedThreadId: string | null;
   onSelectThread: (id: string) => void;
   onNewThread: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   onArchiveThread: (threadId: string, archived: boolean) => void;
   statuses: ThreadProcess[];
   unreadByThread?: Record<string, string[]>;
@@ -206,12 +206,23 @@ export default function ThreadList({
           <img src="/logo.png" alt="Entourage" className="h-7 w-7" />
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Entourage</h1>
         </div>
-        <button
-          onClick={onNewThread}
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
-        >
-          + New
-        </button>
+        <div className="flex items-center gap-2">
+          {isMobile && onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={onNewThread}
+            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
+          >
+            + New
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {activeThreads.length === 0 && archivedThreads.length === 0 && (
@@ -260,15 +271,6 @@ export default function ThreadList({
               ))}
           </div>
         )}
-      </div>
-      <div className="border-t border-zinc-200 dark:border-zinc-700 px-5 py-3">
-        <button
-          onClick={onOpenSettings}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </button>
       </div>
       {contextMenu && (
         <ContextMenu

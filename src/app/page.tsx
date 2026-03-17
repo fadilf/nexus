@@ -398,6 +398,7 @@ export default function Home() {
             onAddWorkspace={() => setShowAddWorkspace(true)}
             onRemoveWorkspace={handleRemoveWorkspace}
             onEditWorkspace={handleEditWorkspace}
+            onOpenSettings={() => setShowSettings(true)}
           />
           <div className="relative flex-shrink-0" style={{ width: sidebarWidth }}>
             {threadListEl}
