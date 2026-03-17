@@ -1,4 +1,4 @@
-export type AgentModel = "claude" | "gemini";
+export type AgentModel = "claude" | "gemini" | "codex";
 
 export type Icon =
   | { type: "lucide"; name: string }

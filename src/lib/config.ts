@@ -9,7 +9,7 @@ export function getUploadsDir(workspaceDir?: string): string {
   return path.join(workspaceDir || process.cwd(), ENTOURAGE_DIR, UPLOADS_DIR);
 }
 
-export const DEFAULT_AGENT_IDS = ["claude", "gemini"];
+export const DEFAULT_AGENT_IDS = ["claude", "gemini", "codex"];
 
 export const DEFAULT_AGENTS: Agent[] = [
   {
@@ -24,6 +24,13 @@ export const DEFAULT_AGENTS: Agent[] = [
     name: "Gemini",
     model: "gemini",
     avatarColor: "#3b82f6",
+    isDefault: true,
+  },
+  {
+    id: "codex",
+    name: "Codex",
+    model: "codex",
+    avatarColor: "#10a37f",
     isDefault: true,
   },
 ];
@@ -49,6 +56,28 @@ export function getCliCommand(model: string, prompt: string, sessionId: string, 
       args.push("--append-system-prompt", personality);
     }
     return { cmd: "claude", args };
+  }
+
+  if (model === "codex") {
+    let effectivePrompt = fullPrompt;
+    if (personality) {
+      effectivePrompt = `[System Instructions]\n${personality}\n[End System Instructions]\n\n${effectivePrompt}`;
+    }
+
+    const args: string[] = [];
+    if (isResume) {
+      args.push("exec", "resume", "--json", "--dangerously-bypass-approvals-and-sandbox", sessionId);
+    } else {
+      args.push("exec", "--json", "--dangerously-bypass-approvals-and-sandbox");
+    }
+    if (hasImages) {
+      for (const p of imagePaths) {
+        args.push("-i", p);
+      }
+    }
+    args.push(effectivePrompt);
+
+    return { cmd: "codex", args };
   }
 
   // Gemini: no --system-instruction flag, prepend to prompt
