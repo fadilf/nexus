@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from "child_process";
+import { spawn as cpSpawn, ChildProcess } from "child_process";
 import { getCliCommand } from "./config";
 import { ThreadProcess, AgentModel } from "./types";
 import crypto from "crypto";
@@ -40,6 +40,7 @@ function summarizeStderr(stderr: string): string {
 class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
   private usedSessions = new Set<string>(); // Track sessions that have been used
+  private killedSessions = new Set<string>(); // Track sessions killed intentionally
 
   private key(threadId: string, agentId: string): string {
     return `${threadId}:${agentId}`;
@@ -82,7 +83,7 @@ class ProcessManager {
 
     const { cmd, args } = getCliCommand(model, prompt, sessionId, isResume, personality, imagePaths);
 
-    const child = spawn(cmd, args, {
+    const child = cpSpawn(cmd, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
@@ -98,13 +99,42 @@ class ProcessManager {
     };
     this.processes.set(k, entry);
 
+    // When resuming, defer onData until we confirm the session exists.
+    // If --resume fails (error result), we retry with --session-id and discard error output.
+    // Once we see a non-result line (e.g. system/init/assistant), flush and stream normally.
+    let deferredChunks: string[] | null = isResume ? [] : null;
+
     child.stdout?.on("data", (data: Buffer) => {
       const chunk = data.toString();
       entry.buffer.push(chunk);
       if (entry.buffer.length > MAX_BUFFER_CHUNKS) {
         entry.buffer.shift();
       }
-      onData(chunk);
+      if (deferredChunks) {
+        // Check if this chunk contains a non-error line, meaning resume succeeded
+        const hasNonErrorContent = chunk.split("\n").some((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return false;
+          try {
+            const json = JSON.parse(trimmed);
+            return json.type !== "result";
+          } catch {
+            return true; // Non-JSON output means real content
+          }
+        });
+        if (hasNonErrorContent) {
+          // Resume succeeded — flush deferred chunks and switch to direct forwarding
+          for (const deferred of deferredChunks) {
+            onData(deferred);
+          }
+          deferredChunks = null;
+          onData(chunk);
+        } else {
+          deferredChunks.push(chunk);
+        }
+      } else {
+        onData(chunk);
+      }
     });
 
     child.stderr?.on("data", (data: Buffer) => {
@@ -126,7 +156,71 @@ class ProcessManager {
     });
 
     child.on("close", (code) => {
-      if (code !== 0) {
+      // Check if --resume produced only an error result (session not found).
+      // The CLI may exit with code 0 but output an error JSON with is_error:true.
+      const resumeFailedWithError = isResume && entry.buffer.length > 0 && (() => {
+        const output = entry.buffer.join("").trim();
+        try {
+          const lastLine = output.split("\n").filter(l => l.trim()).pop() ?? "";
+          const json = JSON.parse(lastLine);
+          return json.type === "result" && json.is_error === true;
+        } catch {
+          return false;
+        }
+      })();
+
+      if (code !== 0 || resumeFailedWithError) {
+        // If --resume failed (no output or error result), the session likely doesn't exist.
+        // Retry with --session-id to start a fresh CLI session.
+        if (isResume && (entry.buffer.length === 0 || resumeFailedWithError)) {
+          this.processes.delete(k);
+          const fresh = getCliCommand(model, prompt, sessionId, false, personality, imagePaths);
+          const retryChild = cpSpawn(fresh.cmd, fresh.args, {
+            cwd,
+            stdio: ["ignore", "pipe", "pipe"],
+            env: { ...process.env },
+          });
+          const retryEntry: ProcessEntry = {
+            process: retryChild,
+            threadId,
+            agentId,
+            status: "running",
+            buffer: [],
+            stderrBuffer: [],
+          };
+          this.processes.set(k, retryEntry);
+
+          retryChild.stdout?.on("data", (data: Buffer) => {
+            const chunk = data.toString();
+            retryEntry.buffer.push(chunk);
+            if (retryEntry.buffer.length > MAX_BUFFER_CHUNKS) retryEntry.buffer.shift();
+            onData(chunk);
+          });
+          retryChild.stderr?.on("data", (data: Buffer) => {
+            const chunk = data.toString();
+            retryEntry.stderrBuffer.push(chunk);
+            if (retryEntry.stderrBuffer.length > MAX_BUFFER_CHUNKS) retryEntry.stderrBuffer.shift();
+          });
+          retryChild.on("error", (err) => {
+            retryEntry.status = "error";
+            onError(err);
+          });
+          retryChild.on("close", (retryCode) => {
+            if (retryCode !== 0) {
+              retryEntry.status = "error";
+              if (retryEntry.stderrBuffer.length > 0) {
+                const stderrText = retryEntry.stderrBuffer.join("").trim();
+                if (stderrText) onError(new Error(summarizeStderr(stderrText)));
+              }
+            } else {
+              if (!this.killedSessions.has(sessionId)) { this.usedSessions.add(sessionId); }
+            }
+            onClose(retryCode);
+            this.processes.delete(k);
+          });
+          return;
+        }
+
         entry.status = "error";
         // If process failed and we have stderr, report it as an error
         if (entry.stderrBuffer.length > 0) {
@@ -137,7 +231,7 @@ class ProcessManager {
         }
       } else {
         // Mark session as used so follow-ups use --resume
-        this.usedSessions.add(sessionId);
+        if (!this.killedSessions.has(sessionId)) { this.usedSessions.add(sessionId); }
       }
       onClose(code);
       // Clean up after process exits
@@ -167,6 +261,37 @@ class ProcessManager {
       // Already dead
     }
     this.processes.delete(k);
+  }
+
+  isThreadStreaming(threadId: string): boolean {
+    for (const [, entry] of this.processes) {
+      if (entry.threadId === threadId && entry.status === "running") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  killByThread(threadId: string): void {
+    const toKill: string[] = [];
+    for (const [key, entry] of this.processes) {
+      if (entry.threadId === threadId) {
+        const sessionId = this.getSessionId(entry.threadId, entry.agentId);
+        this.usedSessions.delete(sessionId);
+        this.killedSessions.add(sessionId);
+        try {
+          entry.process.kill("SIGTERM");
+          const timer = setTimeout(() => {
+            try { entry.process.kill("SIGKILL"); } catch { /* already dead */ }
+          }, 5000);
+          entry.process.on("close", () => clearTimeout(timer));
+        } catch { /* already dead */ }
+        toKill.push(key);
+      }
+    }
+    for (const key of toKill) {
+      this.processes.delete(key);
+    }
   }
 
   killAll(): void {
