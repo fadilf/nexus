@@ -7,7 +7,7 @@ import {
   Database, Globe, Lock, Unlock, MessageSquare, Users, Star, Heart, Flag,
   Layers, GitBranch, Package, Settings, Sparkles, Wand2, Palette, Music,
   Camera, Microscope, Telescope, Beaker, Atom, Binary, CircuitBoard, Cog,
-  Crown, Diamond, Flame, Gem, Leaf, Mountain, Skull, Swords,
+  Crown, Diamond, Flame, Gem, Leaf, Mountain, Skull, Swords, Upload,
 } from "lucide-react";
 import type { Icon } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
@@ -38,13 +38,18 @@ export function renderIcon(icon: Icon, className: string = "h-4 w-4") {
 export default function IconPicker({
   value,
   onChange,
+  enableUpload = false,
 }: {
   value?: Icon;
   onChange: (icon: Icon) => void;
+  enableUpload?: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [mode, setMode] = useState<"lucide" | "emoji">(value?.type === "emoji" ? "emoji" : "lucide");
+  const [mode, setMode] = useState<"lucide" | "emoji" | "upload">(
+    value?.type === "emoji" ? "emoji" : value?.type === "image" ? "upload" : "lucide"
+  );
   const [emojiInput, setEmojiInput] = useState(value?.type === "emoji" ? value.value : "");
+  const [uploading, setUploading] = useState(false);
 
   const filtered = ICON_NAMES.filter((name) =>
     name.toLowerCase().includes(search.toLowerCase())
@@ -71,6 +76,17 @@ export default function IconPicker({
         >
           Emoji
         </button>
+        {enableUpload && (
+          <button
+            type="button"
+            onClick={() => setMode("upload")}
+            className={`rounded px-2 py-1 text-xs font-medium ${
+              mode === "upload" ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900" : "bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600"
+            }`}
+          >
+            Upload
+          </button>
+        )}
       </div>
 
       {mode === "lucide" ? (
@@ -107,6 +123,52 @@ export default function IconPicker({
             )}
           </div>
         </>
+      ) : mode === "upload" ? (
+        <div className="space-y-2">
+          {value?.type === "image" && (
+            <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <img
+                src={`/api/workspace-icons/${value.imageId}?ext=${value.ext}`}
+                alt=""
+                className="h-8 w-8 rounded-full object-cover"
+              />
+              <span>Current image</span>
+            </div>
+          )}
+          <label className={`flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-600 p-4 cursor-pointer hover:border-violet-400 dark:hover:border-violet-500 transition-colors ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+            <Upload className="h-4 w-4 text-zinc-400" />
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              {uploading ? "Uploading..." : "Choose image (PNG, JPG, GIF, WebP)"}
+            </span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploading(true);
+                try {
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  const res = await fetch("/api/workspace-icons", { method: "POST", body: formData });
+                  if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.error || "Upload failed");
+                    return;
+                  }
+                  const { imageId, ext } = await res.json();
+                  onChange({ type: "image", imageId, ext });
+                } catch {
+                  alert("Upload failed");
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            />
+          </label>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">Max 2MB</p>
+        </div>
       ) : (
         <div className="flex items-center gap-2">
           <input
