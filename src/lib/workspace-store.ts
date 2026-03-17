@@ -75,6 +75,19 @@ export async function updateWorkspace(id: string, updates: WorkspaceUpdates): Pr
   return data.workspaces[idx];
 }
 
+export async function reorderWorkspaces(orderedIds: string[]): Promise<Workspace[]> {
+  const data = await loadData();
+  const map = new Map(data.workspaces.map((w) => [w.id, w]));
+  const reordered = orderedIds.map((id) => map.get(id)).filter(Boolean) as Workspace[];
+  // Append any workspaces not in orderedIds (safety net)
+  for (const ws of data.workspaces) {
+    if (!orderedIds.includes(ws.id)) reordered.push(ws);
+  }
+  data.workspaces = reordered;
+  await saveData(data);
+  return data.workspaces;
+}
+
 export async function getWorkspaceDir(id: string): Promise<string> {
   const data = await loadData();
   const ws = data.workspaces.find((w) => w.id === id);

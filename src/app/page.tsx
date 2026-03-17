@@ -265,6 +265,22 @@ export default function Home() {
     []
   );
 
+  const handleReorderWorkspaces = useCallback(
+    async (orderedIds: string[]) => {
+      // Optimistic update
+      setWorkspaces((prev) => {
+        const map = new Map(prev.map((w) => [w.id, w]));
+        return orderedIds.map((id) => map.get(id)).filter(Boolean) as Workspace[];
+      });
+      await fetch("/api/workspaces/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds }),
+      });
+    },
+    []
+  );
+
   const handleSendMessage = useCallback(
     async (content: string, images?: MessageImage[]) => {
       if (!selectedThreadId || !selectedThread) return;
@@ -415,6 +431,7 @@ export default function Home() {
             onAddWorkspace={() => setShowAddWorkspace(true)}
             onRemoveWorkspace={handleRemoveWorkspace}
             onEditWorkspace={handleEditWorkspace}
+            onReorderWorkspaces={handleReorderWorkspaces}
             onOpenSettings={() => setShowSettings(true)}
           />
           <div className="relative flex-shrink-0" style={{ width: sidebarWidth }}>

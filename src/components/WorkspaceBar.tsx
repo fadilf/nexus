@@ -13,6 +13,7 @@ type Props = {
   onAddWorkspace: () => void;
   onRemoveWorkspace: (id: string) => void;
   onEditWorkspace: (id: string, updates: { name?: string; color?: string; icon?: Icon | null }) => void;
+  onReorderWorkspaces: (orderedIds: string[]) => void;
   onOpenSettings: () => void;
 };
 
@@ -23,6 +24,7 @@ export default function WorkspaceBar({
   onAddWorkspace,
   onRemoveWorkspace,
   onEditWorkspace,
+  onReorderWorkspaces,
   onOpenSettings,
 }: Props) {
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -30,6 +32,8 @@ export default function WorkspaceBar({
   const [editName, setEditName] = useState("");
   const [iconPickerFor, setIconPickerFor] = useState<string | null>(null);
   const [iconPickerTop, setIconPickerTop] = useState(100);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const iconPickerRef = useRef<HTMLDivElement>(null);
@@ -106,7 +110,30 @@ export default function WorkspaceBar({
       {workspaces.map((ws) => {
         const isActive = ws.id === activeWorkspaceId;
         return (
-          <div key={ws.id} className="relative group flex items-center">
+          <div
+            key={ws.id}
+            className="relative group flex items-center"
+            draggable
+            onDragStart={() => setDragId(ws.id)}
+            onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+            onDragOver={(e) => { e.preventDefault(); setDragOverId(ws.id); }}
+            onDrop={() => {
+              if (dragId && dragId !== ws.id) {
+                const ids = workspaces.map((w) => w.id);
+                const fromIdx = ids.indexOf(dragId);
+                const toIdx = ids.indexOf(ws.id);
+                ids.splice(fromIdx, 1);
+                ids.splice(toIdx, 0, dragId);
+                onReorderWorkspaces(ids);
+              }
+              setDragId(null);
+              setDragOverId(null);
+            }}
+          >
+            {/* Drop indicator */}
+            {dragOverId === ws.id && dragId !== ws.id && (
+              <div className="absolute -top-1.5 left-3 right-0 h-0.5 bg-violet-500 rounded-full" />
+            )}
             {/* Active indicator pill */}
             <div
               className={`absolute -left-0.5 w-1 rounded-r-full transition-all duration-200 ${
@@ -136,7 +163,7 @@ export default function WorkspaceBar({
                     isActive
                       ? "rounded-2xl shadow-lg shadow-black/30 scale-105"
                       : "hover:rounded-2xl hover:brightness-110"
-                  }`}
+                  } ${dragId === ws.id ? "opacity-40" : ""}`}
                   style={{ backgroundColor: ws.color }}
                 >
                   {ws.icon ? renderIcon(ws.icon, "h-5 w-5") : getInitials(ws.name)}
