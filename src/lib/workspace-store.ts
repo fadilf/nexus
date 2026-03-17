@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
-import { Workspace } from "./types";
+import { Workspace, Icon } from "./types";
 const WORKSPACE_FILE = path.join(os.homedir(), ".entourage", "workspaces.json");
 
 type WorkspaceData = { workspaces: Workspace[] };
@@ -30,7 +30,7 @@ export async function loadWorkspaces(): Promise<Workspace[]> {
   return data.workspaces;
 }
 
-export async function addWorkspace(directory: string, name?: string, color?: string): Promise<Workspace> {
+export async function addWorkspace(directory: string, name?: string, color?: string, icon?: Icon): Promise<Workspace> {
   const data = await loadData();
 
   if (data.workspaces.some((w) => w.directory === directory)) {
@@ -43,6 +43,7 @@ export async function addWorkspace(directory: string, name?: string, color?: str
     directory,
     color: color || COLORS[data.workspaces.length % COLORS.length],
     addedAt: new Date().toISOString(),
+    ...(icon && { icon }),
   };
 
   data.workspaces.push(workspace);
@@ -56,12 +57,20 @@ export async function removeWorkspace(id: string): Promise<void> {
   await saveData(data);
 }
 
-export async function updateWorkspace(id: string, updates: Partial<Pick<Workspace, "name" | "color">>): Promise<Workspace> {
+type WorkspaceUpdates = { name?: string; color?: string; icon?: Icon | null };
+
+export async function updateWorkspace(id: string, updates: WorkspaceUpdates): Promise<Workspace> {
   const data = await loadData();
   const idx = data.workspaces.findIndex((w) => w.id === id);
   if (idx === -1) throw new Error("Workspace not found");
 
-  data.workspaces[idx] = { ...data.workspaces[idx], ...updates };
+  const { icon, ...rest } = updates;
+  data.workspaces[idx] = { ...data.workspaces[idx], ...rest };
+  if (icon === null) {
+    delete data.workspaces[idx].icon;
+  } else if (icon !== undefined) {
+    data.workspaces[idx].icon = icon;
+  }
   await saveData(data);
   return data.workspaces[idx];
 }

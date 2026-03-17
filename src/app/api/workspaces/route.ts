@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadWorkspaces, addWorkspace } from "@/lib/workspace-store";
 import { stat } from "fs/promises";
+import { Icon } from "@/lib/types";
 
 export async function GET() {
   const workspaces = await loadWorkspaces();
@@ -8,10 +9,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { directory, name, color } = (await request.json()) as {
+  const { directory, name, color, icon } = (await request.json()) as {
     directory: string;
     name?: string;
     color?: string;
+    icon?: Icon;
   };
 
   if (!directory) {
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const workspace = await addWorkspace(directory, name, color);
+    const workspace = await addWorkspace(directory, name, color, icon);
     return NextResponse.json(workspace, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
