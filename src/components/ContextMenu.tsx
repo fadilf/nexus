@@ -11,7 +11,7 @@ export default function ContextMenu({
   x: number;
   y: number;
   onClose: () => void;
-  items: { label: string; icon: React.ReactNode; onClick: () => void }[];
+  items: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,11 +32,17 @@ export default function ContextMenu({
       {items.map((item) => (
         <button
           key={item.label}
+          disabled={item.disabled}
           onClick={() => {
+            if (item.disabled) return;
             item.onClick();
             onClose();
           }}
-          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          className={`flex w-full items-center gap-2 px-3 py-2 text-sm ${
+            item.disabled
+              ? "text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+              : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          }`}
         >
           {item.icon}
           {item.label}

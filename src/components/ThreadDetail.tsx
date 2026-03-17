@@ -65,9 +65,8 @@ export default function ThreadDetail({
   }, [thread?.messages.length, streamingContentKey]);
 
   const handleRewindRequest = useCallback((messageId: string, x: number, y: number) => {
-    if (isStreaming) return;
     setRewindMenu({ x, y, messageId });
-  }, [isStreaming]);
+  }, []);
 
   if (!thread) {
     return (
@@ -178,7 +177,7 @@ export default function ThreadDetail({
           messages={allMessages}
           agents={thread.agents}
           displayName={displayName}
-          onRewind={isStreaming ? undefined : handleRewindRequest}
+          onRewind={handleRewindRequest}
         />
       </div>
       <MessageInput
@@ -197,9 +196,10 @@ export default function ThreadDetail({
           onClose={() => setRewindMenu(null)}
           items={[
             {
-              label: "Rewind to here",
+              label: isStreaming ? "Rewind to here (wait for response)" : "Rewind to here",
               icon: <RotateCcw className="h-4 w-4" />,
               onClick: () => setRewindConfirm(rewindMenu.messageId),
+              disabled: isStreaming,
             },
           ]}
         />
