@@ -19,6 +19,7 @@ export default function MessageInput({
   onStop,
   disabled,
   isMobile,
+  onDraftChange,
 }: {
   agents: Agent[];
   allAgents?: Agent[];
@@ -26,6 +27,7 @@ export default function MessageInput({
   onStop?: (agentId: string) => void;
   disabled?: boolean;
   isMobile?: boolean;
+  onDraftChange?: (hasText: boolean) => void;
 }) {
   const wsParam = useWsParam();
   const [content, setContent] = useState("");
@@ -102,13 +104,15 @@ export default function MessageInput({
 
     onSendMessage(content.trim(), images);
     setContent("");
+    onDraftChange?.(false);
     setShowMentions(false);
-  }, [canSend, content, pendingImages, onSendMessage, uploadImages]);
+  }, [canSend, content, pendingImages, onSendMessage, uploadImages, onDraftChange]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value;
       setContent(value);
+      onDraftChange?.(value.trim().length > 0);
 
       const cursorPos = e.target.selectionStart;
       const textBeforeCursor = value.slice(0, cursorPos);
@@ -120,7 +124,7 @@ export default function MessageInput({
         setShowMentions(false);
       }
     },
-    []
+    [onDraftChange]
   );
 
   const insertMention = useCallback(
