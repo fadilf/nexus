@@ -12,6 +12,7 @@ export type StreamEvent =
 export function createStreamParser(model: AgentModel): (chunk: string) => StreamEvent[] {
   let buffer = "";
   const codexExtractor = model === "codex" ? createCodexEventExtractor() : null;
+  const openCodeExtractor = model === "opencode" ? createOpenCodeEventExtractor() : null;
 
   return (chunk: string): StreamEvent[] => {
     buffer += chunk;
@@ -45,6 +46,13 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
           continue;
         }
 
+        // OpenCode CLI events (from --format json JSONL)
+        if (openCodeExtractor) {
+          const openCodeEvents = openCodeExtractor(json);
+          events.push(...openCodeEvents);
+          continue;
+        }
+
         // Claude CLI tool events (from stream-json --verbose)
         if (model === "claude") {
           const toolEvents = extractClaudeToolEvents(json);
@@ -70,11 +78,10 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
         }
       } catch {
         // Not JSON — only treat as content for Claude (which may emit plain text)
-        // For Gemini, non-JSON lines are diagnostic noise (errors, warnings, etc.)
+        // For Gemini/Codex/OpenCode, non-JSON lines are diagnostic noise
         if (trimmed && model === "claude") {
           events.push({ type: "content", text: trimmed });
         }
-        // For Gemini, skip non-JSON lines entirely — they're stderr-like diagnostics
       }
     }
 
@@ -193,6 +200,61 @@ function createCodexEventExtractor(): (json: Record<string, unknown>) => StreamE
     }
 
     // Skip: thread.started, turn.started, turn.completed, reasoning, todo_list, web_search, collab_tool_call
+    return events;
+  };
+}
+
+/**
+ * Create a stateful OpenCode event extractor.
+ *
+ * OpenCode CLI (--format json) emits JSONL with these event types:
+ *   step_start, text, tool_use, step_finish
+ *
+ * Tool events arrive with state.status "completed" containing both
+ * input and output in a single event.
+ */
+function createOpenCodeEventExtractor(): (json: Record<string, unknown>) => StreamEvent[] {
+  return (json: Record<string, unknown>): StreamEvent[] => {
+    const events: StreamEvent[] = [];
+    const type = json.type as string;
+
+    // Text content
+    if (type === "text") {
+      const part = json.part as Record<string, unknown> | undefined;
+      if (part && typeof part.text === "string") {
+        events.push({ type: "content", text: part.text });
+      }
+      return events;
+    }
+
+    // Tool use — OpenCode sends completed tool calls with input + output in one event
+    if (type === "tool_use") {
+      const part = json.part as Record<string, unknown> | undefined;
+      if (part) {
+        const callID = typeof part.callID === "string" ? part.callID : "unknown";
+        const toolName = typeof part.tool === "string" ? part.tool : "tool";
+        const state = part.state as Record<string, unknown> | undefined;
+        const input = state?.input ? JSON.stringify(state.input) : undefined;
+        events.push({ type: "tool_start", toolId: callID, toolName, input });
+
+        if (state?.status === "completed") {
+          const output = typeof state.output === "string" ? state.output : JSON.stringify(state.output ?? "");
+          events.push({ type: "tool_result", toolId: callID, output });
+        }
+      }
+      return events;
+    }
+
+    // Step finish with reason "stop" means the agent is done
+    if (type === "step_finish") {
+      const part = json.part as Record<string, unknown> | undefined;
+      if (part?.reason === "stop") {
+        events.push({ type: "done", status: "complete" });
+      }
+      return events;
+    }
+
+    // step_start and other events are silently consumed
     return events;
   };
 }
