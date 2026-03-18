@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Agent, AgentModel, Icon } from "@/lib/types";
+import { PLUGINS } from "@/lib/plugins";
 import ModelIcon from "./ModelIcon";
 import IconPicker from "./IconPicker";
 import { ArrowLeft, GripVertical, Pencil, Trash2, Sun, Moon } from "lucide-react";
@@ -27,7 +28,7 @@ const emptyForm: AgentFormData = {
   avatarColor: "#8b5cf6",
 };
 
-type Tab = "general" | "agents";
+type Tab = "general" | "agents" | "plugins";
 
 export default function SettingsDialog({
   open,
@@ -48,6 +49,7 @@ export default function SettingsDialog({
   useEffect(() => setMounted(true), []);
   const [displayName, setDisplayName] = useState("");
   const [savedDisplayName, setSavedDisplayName] = useState("");
+  const [plugins, setPlugins] = useState<Record<string, boolean>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
@@ -62,6 +64,7 @@ export default function SettingsDialog({
       const data = await res.json();
       setDisplayName(data.displayName || "");
       setSavedDisplayName(data.displayName || "");
+      setPlugins(data.plugins || {});
     }
   }, []);
 
@@ -203,7 +206,7 @@ export default function SettingsDialog({
           </div>
           {!showForm && (
             <div className="flex gap-1 -mb-px">
-              {([["general", "General"], ["agents", "Agent Profiles"]] as const).map(([key, label]) => (
+              {([["general", "General"], ["agents", "Agent Profiles"], ["plugins", "Plugins"]] as const).map(([key, label]) => (
                 <button
                   key={key}
                   onClick={() => { setTab(key); setError(""); }}
@@ -367,7 +370,7 @@ export default function SettingsDialog({
                 </div>
               </div>
             </div>
-          ) : (
+          ) : tab === "agents" ? (
             <div className="space-y-1">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Agent Profiles</h4>
@@ -453,7 +456,44 @@ export default function SettingsDialog({
                 </div>
               ))}
             </div>
-          )}
+          ) : tab === "plugins" ? (
+            <div className="space-y-1">
+              <h4 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">Plugins</h4>
+              {PLUGINS.map((plugin) => {
+                const enabled = plugins[plugin.id] ?? plugin.enabledByDefault;
+                return (
+                  <div
+                    key={plugin.id}
+                    className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+                  >
+                    <div>
+                      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{plugin.name}</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const updated = { ...plugins, [plugin.id]: !enabled };
+                        setPlugins(updated);
+                        await fetch("/api/config", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ plugins: updated }),
+                        });
+                      }}
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        enabled ? "bg-violet-600" : "bg-zinc-300 dark:bg-zinc-600"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          enabled ? "translate-x-5" : ""
+                        }`}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
