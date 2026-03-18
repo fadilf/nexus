@@ -4,7 +4,7 @@ import ModelIcon from "./ModelIcon";
 import AgentStatusBadge from "./AgentStatusBadge";
 import ContextMenu from "./ContextMenu";
 import Logo from "@/components/Logo";
-import { Settings, Archive, ArchiveRestore, ChevronRight, MoreHorizontal } from "lucide-react";
+import { Menu, Archive, ArchiveRestore, ChevronRight, MoreHorizontal } from "lucide-react";
 
 function formatDate(timestamp: string) {
   const date = new Date(timestamp);
@@ -163,7 +163,7 @@ export default function ThreadList({
   selectedThreadId,
   onSelectThread,
   onNewThread,
-  onOpenSettings,
+  onOpenMenu,
   onArchiveThread,
   statuses,
   unreadByThread,
@@ -173,7 +173,7 @@ export default function ThreadList({
   selectedThreadId: string | null;
   onSelectThread: (id: string) => void;
   onNewThread: () => void;
-  onOpenSettings?: () => void;
+  onOpenMenu?: () => void;
   onArchiveThread: (threadId: string, archived: boolean) => void;
   statuses: ThreadProcess[];
   unreadByThread?: Record<string, string[]>;
@@ -208,21 +208,21 @@ export default function ThreadList({
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Entourage</h1>
         </div>
         <div className="flex items-center gap-2">
-          {isMobile && onOpenSettings && (
-            <button
-              onClick={onOpenSettings}
-              className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-          )}
           <button
             onClick={onNewThread}
             className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
           >
             + New
           </button>
+          {isMobile && onOpenMenu && (
+            <button
+              onClick={onOpenMenu}
+              className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              title="Menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
