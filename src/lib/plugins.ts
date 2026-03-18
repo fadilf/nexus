@@ -5,7 +5,7 @@ export const PLUGINS: Plugin[] = [
     id: "git",
     name: "Source Control",
     icon: "GitBranch",
-    enabledByDefault: true,
+    enabledByDefault: false,
   },
 ];
 

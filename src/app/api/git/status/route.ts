@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   try {
     const isRepo = await git.checkIsRepo();
     if (!isRepo) {
-      return NextResponse.json({ isRepo: false, branch: "", staged: [], unstaged: [] } satisfies GitStatus);
+      return NextResponse.json({ isRepo: false, branch: "", staged: [], unstaged: [], ahead: 0, behind: 0 } satisfies GitStatus);
     }
 
     const status = await git.status();
@@ -45,6 +45,8 @@ export async function GET(request: Request) {
       branch: status.current ?? "",
       staged,
       unstaged,
+      ahead: status.ahead,
+      behind: status.behind,
     } satisfies GitStatus);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Git error";

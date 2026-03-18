@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { GitBranch } from "lucide-react";
+import { GitBranch, ArrowDown, ArrowUp } from "lucide-react";
 import { GitStatus } from "@/lib/types";
 import GitFileList from "./GitFileList";
 import GitDiffViewer from "./GitDiffViewer";
@@ -21,6 +21,8 @@ export default function GitDialog({
   const [diff, setDiff] = useState<string | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
   const [committing, setCommitting] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wsParam = workspaceId ? `?workspaceId=${workspaceId}` : "";
@@ -119,6 +121,42 @@ export default function GitDialog({
     }
   };
 
+  const handlePull = async () => {
+    setPulling(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/git/pull${wsParam}`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Pull failed");
+        return;
+      }
+      await fetchStatus();
+    } catch {
+      setError("Pull failed");
+    } finally {
+      setPulling(false);
+    }
+  };
+
+  const handlePush = async () => {
+    setPushing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/git/push${wsParam}`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Push failed");
+        return;
+      }
+      await fetchStatus();
+    } catch {
+      setError("Push failed");
+    } finally {
+      setPushing(false);
+    }
+  };
+
   if (!open) return null;
 
   const totalChanges = (status?.staged.length ?? 0) + (status?.unstaged.length ?? 0);
@@ -141,6 +179,28 @@ export default function GitDialog({
               <span className="rounded-full bg-violet-100 dark:bg-violet-900/40 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
                 {status.branch}
               </span>
+            )}
+            {status?.isRepo && (
+              <div className="flex items-center gap-1 ml-2">
+                <button
+                  onClick={handlePull}
+                  disabled={pulling || (status?.behind === 0)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={`Pull${status?.behind ? ` (${status.behind} behind)` : ""}`}
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                  {pulling ? "..." : status?.behind ? status.behind : ""}
+                </button>
+                <button
+                  onClick={handlePush}
+                  disabled={pushing || (status?.ahead === 0)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={`Push${status?.ahead ? ` (${status.ahead} ahead)` : ""}`}
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                  {pushing ? "..." : status?.ahead ? status.ahead : ""}
+                </button>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-3">

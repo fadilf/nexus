@@ -97,4 +97,6 @@ export type GitStatus = {
   branch: string;
   staged: GitFileEntry[];
   unstaged: GitFileEntry[];
+  ahead: number;
+  behind: number;
 };
