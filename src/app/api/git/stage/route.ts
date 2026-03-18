@@ -45,6 +45,8 @@ export async function POST(request: Request) {
       branch: status.current ?? "",
       staged,
       unstaged,
+      ahead: 0,
+      behind: 0,
     } satisfies GitStatus);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Git error";
