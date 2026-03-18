@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProcessManager } from "@/lib/process-manager";
-import { truncateAfterMessage } from "@/lib/thread-store";
+import { getThread, truncateAfterMessage } from "@/lib/thread-store";
 import { resolveWorkspaceDir } from "@/lib/workspace-context";
 
 export async function POST(
@@ -24,7 +24,15 @@ export async function POST(
     );
   }
 
+  // Load thread to get agent IDs before truncating
+  const currentThread = await getThread(workspaceDir, threadId);
+  if (!currentThread) {
+    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
   pm.killByThread(threadId);
+  // Reset session IDs for ALL agents so CLI starts fresh sessions (not continuing old on-disk ones)
+  pm.resetSessions(threadId, currentThread.agents.map((a) => a.id));
 
   const thread = await truncateAfterMessage(workspaceDir, threadId, messageId);
   if (!thread) {

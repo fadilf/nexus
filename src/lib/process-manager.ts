@@ -66,12 +66,13 @@ class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
   private usedSessions = new Set<string>(); // Track sessions that have been used
   private killedSessions = new Set<string>(); // Track sessions killed intentionally
+  private sessionOverrides = new Map<string, string>(); // Override sessionId after rewind
 
   private key(threadId: string, agentId: string): string {
     return `${threadId}:${agentId}`;
   }
 
-  private getSessionId(threadId: string, agentId: string): string {
+  private baseSessionId(threadId: string, agentId: string): string {
     const hash = crypto
       .createHash("sha256")
       .update(`${threadId}:${agentId}`)
@@ -83,6 +84,15 @@ class ProcessManager {
       ((parseInt(hash[16], 16) & 0x3) | 0x8).toString(16) + hash.slice(17, 20),
       hash.slice(20, 32),
     ].join("-");
+  }
+
+  private getSessionId(threadId: string, agentId: string): string {
+    const k = this.key(threadId, agentId);
+    return this.sessionOverrides.get(k) ?? this.baseSessionId(threadId, agentId);
+  }
+
+  private newSessionId(): string {
+    return crypto.randomUUID();
   }
 
   spawn(
@@ -105,9 +115,13 @@ class ProcessManager {
     this.kill(threadId, agentId);
 
     const sessionId = this.getSessionId(threadId, agentId);
-    const isResume = this.usedSessions.has(sessionId) || hasHistory;
+    const wasRewound = this.sessionOverrides.has(k);
+    const isResume = (this.usedSessions.has(sessionId) || hasHistory) && !wasRewound;
 
-    const { cmd, args } = getCliCommand(model, prompt, sessionId, isResume, personality, imagePaths);
+    // After rewind, use full history prompt so the fresh session has full context
+    const effectivePrompt = (!isResume && wasRewound && fullHistoryPrompt) ? fullHistoryPrompt : prompt;
+
+    const { cmd, args } = getCliCommand(model, effectivePrompt, sessionId, isResume, personality, imagePaths);
 
     const child = cpSpawn(cmd, args, {
       cwd,
@@ -243,11 +257,9 @@ class ProcessManager {
                 if (stderrText) onError(new Error(summarizeStderr(stderrText)));
               }
             } else {
-              if (!this.killedSessions.has(sessionId)) {
-                this.usedSessions.add(sessionId);
-              } else {
-                this.killedSessions.delete(sessionId);
-              }
+              this.killedSessions.delete(sessionId);
+              this.sessionOverrides.delete(k);
+              this.usedSessions.add(sessionId);
             }
             onClose(retryCode);
             this.processes.delete(k);
@@ -265,11 +277,9 @@ class ProcessManager {
         }
       } else {
         // Mark session as used so follow-ups use --resume
-        if (!this.killedSessions.has(sessionId)) {
-          this.usedSessions.add(sessionId);
-        } else {
-          this.killedSessions.delete(sessionId);
-        }
+        this.killedSessions.delete(sessionId);
+        this.sessionOverrides.delete(k);
+        this.usedSessions.add(sessionId);
       }
       onClose(code);
       // Clean up after process exits
@@ -329,6 +339,21 @@ class ProcessManager {
     }
     for (const key of toKill) {
       this.processes.delete(key);
+    }
+  }
+
+  /**
+   * Reset session IDs for all agents in a thread (e.g. after rewind).
+   * Generates new random session IDs so the CLI starts a fresh session
+   * instead of continuing the old on-disk session that still has rewound messages.
+   */
+  resetSessions(threadId: string, agentIds: string[]): void {
+    for (const agentId of agentIds) {
+      const k = this.key(threadId, agentId);
+      const oldSessionId = this.getSessionId(threadId, agentId);
+      this.usedSessions.delete(oldSessionId);
+      this.killedSessions.add(oldSessionId);
+      this.sessionOverrides.set(k, this.newSessionId());
     }
   }
 
