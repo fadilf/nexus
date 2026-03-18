@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { DEFAULT_AGENTS, DEFAULT_AGENT_IDS } from "./config";
 import { Agent } from "./types";
 
-type Config = { agents: Agent[]; displayName?: string };
+type Config = { agents: Agent[]; displayName?: string; plugins?: Record<string, boolean> };
 
 const GLOBAL_CONFIG_DIR = path.join(os.homedir(), ".entourage");
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CONFIG_DIR, "config.json");
@@ -108,6 +108,16 @@ export async function loadDisplayName(): Promise<string> {
 export async function saveDisplayName(displayName: string): Promise<void> {
   const config = await loadConfig();
   await saveConfig({ ...config, displayName: displayName || undefined });
+}
+
+export async function loadPlugins(): Promise<Record<string, boolean>> {
+  const config = await loadConfig();
+  return config.plugins ?? {};
+}
+
+export async function savePlugins(plugins: Record<string, boolean>): Promise<void> {
+  const config = await loadConfig();
+  await saveConfig({ ...config, plugins });
 }
 
 function validateAgentName(name: string): void {
