@@ -15,6 +15,8 @@ export default function FilePreview({
   size,
   loading,
   error,
+  previewMode = "text",
+  rawUrl = null,
 }: {
   content: string | null;
   fileName: string | null;
@@ -22,6 +24,8 @@ export default function FilePreview({
   size: number | null;
   loading: boolean;
   error: string | null;
+  previewMode?: "text" | "image" | "pdf";
+  rawUrl?: string | null;
 }) {
   if (!fileName) {
     return (
@@ -53,6 +57,50 @@ export default function FilePreview({
     );
   }
 
+  // Image preview
+  if (previewMode === "image" && rawUrl) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 px-4 py-2.5">
+          <File className="h-3.5 w-3.5 text-zinc-400" />
+          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{fileName}</span>
+          <span className="rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            Image
+          </span>
+        </div>
+        <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-zinc-50 dark:bg-zinc-900/50">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={rawUrl}
+            alt={fileName ?? ""}
+            className="max-w-full max-h-full object-contain rounded"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // PDF preview
+  if (previewMode === "pdf" && rawUrl) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 px-4 py-2.5">
+          <File className="h-3.5 w-3.5 text-zinc-400" />
+          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{fileName}</span>
+          <span className="rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            PDF
+          </span>
+        </div>
+        <iframe
+          src={rawUrl}
+          title={fileName ?? "PDF preview"}
+          className="flex-1 w-full border-0"
+        />
+      </div>
+    );
+  }
+
+  // Text preview (default)
   const lines = (content ?? "").split("\n");
 
   return (

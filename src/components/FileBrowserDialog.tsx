@@ -5,6 +5,13 @@ import { FolderOpen, ChevronRight } from "lucide-react";
 import FileTree from "./FileTree";
 import FilePreview from "./FilePreview";
 
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
+const PDF_EXTS = new Set(["pdf"]);
+
+function getExt(filePath: string): string {
+  return filePath.split(".").pop()?.toLowerCase() ?? "";
+}
+
 export default function FileBrowserDialog({
   open,
   onClose,
@@ -20,6 +27,8 @@ export default function FileBrowserDialog({
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<"text" | "image" | "pdf">("text");
+  const [rawUrl, setRawUrl] = useState<string | null>(null);
   const [treeKey, setTreeKey] = useState(0);
 
   // Reset state when dialog opens (matches GitDialog pattern)
@@ -30,6 +39,8 @@ export default function FileBrowserDialog({
       setFileLanguage(null);
       setFileSize(null);
       setFileError(null);
+      setPreviewMode("text");
+      setRawUrl(null);
       setTreeKey((k) => k + 1);
     }
   }, [open]);
@@ -48,11 +59,30 @@ export default function FileBrowserDialog({
     async (filePath: string) => {
       if (!workspaceId) return;
       setSelectedPath(filePath);
-      setFileLoading(true);
       setFileError(null);
       setFileContent(null);
+      setRawUrl(null);
+
+      const ext = getExt(filePath);
+      const params = new URLSearchParams({ workspaceId, path: filePath });
+
+      if (IMAGE_EXTS.has(ext)) {
+        setPreviewMode("image");
+        setRawUrl(`/api/files/raw?${params}`);
+        setFileLoading(false);
+        return;
+      }
+
+      if (PDF_EXTS.has(ext)) {
+        setPreviewMode("pdf");
+        setRawUrl(`/api/files/raw?${params}`);
+        setFileLoading(false);
+        return;
+      }
+
+      setPreviewMode("text");
+      setFileLoading(true);
       try {
-        const params = new URLSearchParams({ workspaceId, path: filePath });
         const res = await fetch(`/api/files/read?${params}`);
         const data = await res.json();
         if (!res.ok) {
@@ -139,6 +169,8 @@ export default function FileBrowserDialog({
               size={fileSize}
               loading={fileLoading}
               error={fileError}
+              previewMode={previewMode}
+              rawUrl={rawUrl}
             />
           </div>
         </div>
