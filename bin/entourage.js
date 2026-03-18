@@ -1,22 +1,30 @@
 #!/usr/bin/env node
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { execSync, spawn } = require("child_process");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const path = require("path");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require("fs");
 
 const args = process.argv.slice(2);
 
-// Parse --port flag
-let port = 5555;
-const portIdx = args.indexOf("--port");
-if (portIdx !== -1 && args[portIdx + 1]) {
-  port = parseInt(args[portIdx + 1], 10);
-}
-// Also support -p
-const pIdx = args.indexOf("-p");
-if (pIdx !== -1 && args[pIdx + 1]) {
-  port = parseInt(args[pIdx + 1], 10);
-}
+const getArgValue = (longFlag, shortFlag) => {
+  const longIdx = args.indexOf(longFlag);
+  if (longIdx !== -1 && args[longIdx + 1]) {
+    return args[longIdx + 1];
+  }
+
+  const shortIdx = args.indexOf(shortFlag);
+  if (shortIdx !== -1 && args[shortIdx + 1]) {
+    return args[shortIdx + 1];
+  }
+
+  return undefined;
+};
+
+const port = Number.parseInt(getArgValue("--port", "-p") ?? "5555", 10);
+const host = getArgValue("--host", "-H") ?? "localhost";
 
 const packageDir = path.resolve(__dirname, "..");
 
@@ -27,9 +35,9 @@ if (!fs.existsSync(dotNextDir)) {
   execSync("npx next build", { cwd: packageDir, stdio: "inherit" });
 }
 
-console.log(`Starting Entourage on http://localhost:${port}`);
+console.log(`Starting Entourage on http://${host}:${port}`);
 
-const child = spawn("npx", ["next", "start", "-p", String(port)], {
+const child = spawn("npx", ["next", "start", "-p", String(port), "-H", host], {
   cwd: packageDir,
   stdio: "inherit",
 });
