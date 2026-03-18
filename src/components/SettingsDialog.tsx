@@ -50,6 +50,8 @@ export default function SettingsDialog({
   const [displayName, setDisplayName] = useState("");
   const [savedDisplayName, setSavedDisplayName] = useState("");
   const [plugins, setPlugins] = useState<Record<string, boolean>>({});
+  const [quickRepliesEnabled, setQuickRepliesEnabled] = useState(false);
+  const [quickRepliesAgentId, setQuickRepliesAgentId] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
@@ -65,6 +67,10 @@ export default function SettingsDialog({
       setDisplayName(data.displayName || "");
       setSavedDisplayName(data.displayName || "");
       setPlugins(data.plugins || {});
+      if (data.quickReplies) {
+        setQuickRepliesEnabled(data.quickReplies.enabled);
+        setQuickRepliesAgentId(data.quickReplies.agentId);
+      }
     }
   }, []);
 
@@ -369,6 +375,60 @@ export default function SettingsDialog({
                   )}
                 </div>
               </div>
+
+              {/* Quick Replies */}
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <div>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Quick Replies</span>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">Suggest follow-up replies after agents respond</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    const next = !quickRepliesEnabled;
+                    setQuickRepliesEnabled(next);
+                    await fetch("/api/config", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ quickRepliesEnabled: next }),
+                    });
+                  }}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    quickRepliesEnabled ? "bg-violet-600" : "bg-zinc-300 dark:bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      quickRepliesEnabled ? "translate-x-5" : ""
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {quickRepliesEnabled && (
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <div>
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Suggestion Agent</span>
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">Which agent generates suggestions</p>
+                  </div>
+                  <select
+                    value={quickRepliesAgentId}
+                    onChange={async (e) => {
+                      const agentId = e.target.value;
+                      setQuickRepliesAgentId(agentId);
+                      await fetch("/api/config", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ quickRepliesAgentId: agentId }),
+                      });
+                    }}
+                    className="rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  >
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           ) : tab === "agents" ? (
             <div className="space-y-1">
