@@ -247,7 +247,7 @@ export default function SettingsDialog({
               <div>
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Model</label>
                 <div className="mt-1 flex gap-1">
-                  {(["claude", "gemini", "codex"] as const).map((m) => (
+                  {(["claude", "gemini", "codex", "opencode"] as const).map((m) => (
                     <button
                       key={m}
                       type="button"
