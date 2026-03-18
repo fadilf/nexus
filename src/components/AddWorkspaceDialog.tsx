@@ -109,14 +109,14 @@ export default function AddWorkspaceDialog({ open, onClose, onAdded, inline }: P
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
             Color
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 px-1">
             {COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setColor(c)}
-                className={`w-8 h-8 rounded-lg transition-all ${
-                  color === c ? "ring-2 ring-offset-2 ring-zinc-900 dark:ring-zinc-100 dark:ring-offset-zinc-800 scale-110" : "hover:scale-105"
+                className={`w-8 h-8 rounded-lg box-border transition-all ${
+                  color === c ? "ring-2 ring-offset-2 ring-zinc-900 dark:ring-zinc-100 dark:ring-offset-zinc-800" : "hover:scale-105"
                 }`}
                 style={{ backgroundColor: c }}
               />

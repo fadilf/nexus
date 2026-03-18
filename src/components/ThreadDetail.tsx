@@ -207,7 +207,7 @@ export default function ThreadDetail({
               onClick: () => navigator.clipboard.writeText(contextMenu.groupText),
             },
             {
-              label: "Rewind to here",
+              label: "Rewind messages to here",
               icon: <RotateCcw className="h-4 w-4" />,
               onClick: () => setRewindConfirm(contextMenu.messageId),
               disabled: isStreaming,
