@@ -232,3 +232,6 @@ No other new dependencies required.
 - **Large diffs:** Rendered as-is with overflow scroll. No truncation in v1.
 - **Concurrent agent edits:** Status refreshes on dialog open and after every action, picking up external changes.
 - **Git CLI not installed:** `simple-git` will throw. Catch and surface as "git not found" error state.
+- **Untracked files:** `git diff` produces no output for untracked files. Read the raw file content and present as an all-additions diff.
+- **Renamed files:** Use `--find-renames` flag when diffing to properly detect renames.
+- **Badge refresh:** The WorkspaceBar badge refreshes on workspace switch and when the git dialog closes after a mutation. No background polling in v1.
