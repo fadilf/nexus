@@ -3,6 +3,7 @@ import { getThread, addMessage, updateMessage, addUnreadAgent } from "@/lib/thre
 import { getProcessManager } from "@/lib/process-manager";
 import { createStreamParser } from "@/lib/stream-parser";
 import { AgentModel, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
+import { upsertContentBlock } from "@/lib/mcp-app";
 import { loadAgents } from "@/lib/agent-store";
 import { buildContextualPrompt, buildFullHistoryPrompt } from "@/lib/context";
 import { stripMentions } from "@/lib/mentions";
@@ -184,6 +185,8 @@ export async function POST(
                 if (tc) {
                   tc.status = "complete";
                   tc.output = event.output;
+                  const nextBlocks = upsertContentBlock(accumulatedBlocks, tc);
+                  accumulatedBlocks.splice(0, accumulatedBlocks.length, ...nextBlocks);
                 }
                 try {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));

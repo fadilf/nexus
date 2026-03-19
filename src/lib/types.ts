@@ -39,9 +39,18 @@ export type ToolCall = {
   output?: string;
 };
 
+export type McpAppBlock = {
+  type: "mcp_app";
+  toolCallId: string;
+  toolName: string;
+  resourceUri?: string;
+  html: string;
+};
+
 export type ContentBlock =
   | { type: "text"; text: string }
-  | { type: "tool_call"; toolCall: ToolCall };
+  | { type: "tool_call"; toolCall: ToolCall }
+  | McpAppBlock;
 
 export type Message = {
   id: string;

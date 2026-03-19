@@ -14,6 +14,7 @@ Create custom agent profiles with distinct names, icons, colors, and personality
 - **Custom agent profiles** — Configure names, icons, colors, and system prompts
 - **@mentions** — Route messages to specific agents
 - **Image attachments** — Send images to vision-capable agents
+- **MCP app rendering** — Render inline HTML-based MCP app results in sandboxed chat iframes
 - **Thread management** — Create, rename, archive, and organize conversations
 - **Real-time streaming** — SSE-based streaming with live response rendering
 - **Workspace management** — Add local project directories and switch between them
@@ -54,6 +55,10 @@ npx @fadilf/entourage -H 0.0.0.0 -p 8080  # both
 npm install
 npm run dev
 ```
+
+### MCP App Demo
+
+See [`docs/mcp-app-demo.md`](docs/mcp-app-demo.md) for a short walkthrough you can use to verify inline MCP app rendering end-to-end.
 
 ## Stack
 

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { Agent, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
+import { upsertContentBlock } from "@/lib/mcp-app";
 
 type StreamingMessage = {
   agentId: string;
@@ -138,12 +139,7 @@ export function useAgentStream(
                     tc.output = event.output;
                   }
                   // Also update the matching block
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const blockIdx = blocks.findIndex((b) => b.type === "tool_call" && b.toolCall.id === event.toolId);
-                  if (blockIdx >= 0) {
-                    const block = blocks[blockIdx] as { type: "tool_call"; toolCall: ToolCall };
-                    blocks[blockIdx] = { type: "tool_call", toolCall: { ...block.toolCall, status: "complete", output: event.output } };
-                  }
+                  const blocks = upsertContentBlock(existing?.contentBlocks ?? [], tc ?? { id: event.toolId, name: "tool", status: "complete", output: event.output });
                   threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
                   triggerRender();
                 }
@@ -305,12 +301,7 @@ export function useAgentStream(
                     tc.status = "complete";
                     tc.output = event.output;
                   }
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const blockIdx = blocks.findIndex((b) => b.type === "tool_call" && b.toolCall.id === event.toolId);
-                  if (blockIdx >= 0) {
-                    const block = blocks[blockIdx] as { type: "tool_call"; toolCall: ToolCall };
-                    blocks[blockIdx] = { type: "tool_call", toolCall: { ...block.toolCall, status: "complete", output: event.output } };
-                  }
+                  const blocks = upsertContentBlock(existing?.contentBlocks ?? [], tc ?? { id: event.toolId, name: "tool", status: "complete", output: event.output });
                   threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
                   triggerRender();
                 }
