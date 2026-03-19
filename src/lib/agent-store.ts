@@ -5,7 +5,8 @@ import crypto from "crypto";
 import { DEFAULT_AGENTS, DEFAULT_AGENT_IDS } from "./config";
 import { Agent } from "./types";
 
-type Config = { agents: Agent[]; displayName?: string; plugins?: Record<string, boolean>; quickRepliesEnabled?: boolean; quickRepliesAgentId?: string };
+type QuickRepliesConfig = { enabled: boolean };
+type Config = { agents: Agent[]; displayName?: string; plugins?: Record<string, boolean>; quickReplies?: QuickRepliesConfig };
 
 const GLOBAL_CONFIG_DIR = path.join(os.homedir(), ".entourage");
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CONFIG_DIR, "config.json");
@@ -120,20 +121,15 @@ export async function savePlugins(plugins: Record<string, boolean>): Promise<voi
   await saveConfig({ ...config, plugins });
 }
 
-export async function loadQuickRepliesConfig(): Promise<{ enabled: boolean; agentId: string }> {
+export async function loadQuickReplies(): Promise<QuickRepliesConfig> {
   const config = await loadConfig();
-  const defaultAgentId = config.agents[0]?.id ?? "claude";
-  return {
-    enabled: config.quickRepliesEnabled ?? false,
-    agentId: config.quickRepliesAgentId ?? defaultAgentId,
-  };
+  return config.quickReplies ?? { enabled: false };
 }
 
-export async function saveQuickRepliesConfig(updates: { enabled?: boolean; agentId?: string }): Promise<void> {
+export async function saveQuickReplies(quickReplies: Partial<QuickRepliesConfig>): Promise<void> {
   const config = await loadConfig();
-  if (updates.enabled !== undefined) config.quickRepliesEnabled = updates.enabled;
-  if (updates.agentId !== undefined) config.quickRepliesAgentId = updates.agentId;
-  await saveConfig(config);
+  const current = config.quickReplies ?? { enabled: false };
+  await saveConfig({ ...config, quickReplies: { ...current, ...quickReplies } });
 }
 
 function validateAgentName(name: string): void {

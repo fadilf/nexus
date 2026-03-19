@@ -3,7 +3,7 @@ import { getThread, addMessage, updateMessage, addUnreadAgent } from "@/lib/thre
 import { getProcessManager } from "@/lib/process-manager";
 import { createStreamParser } from "@/lib/stream-parser";
 import { AgentModel, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
-import { loadAgents, loadQuickRepliesConfig } from "@/lib/agent-store";
+import { loadAgents, loadQuickReplies } from "@/lib/agent-store";
 import { buildContextualPrompt, buildFullHistoryPrompt } from "@/lib/context";
 import { QUICK_REPLY_INSTRUCTION, parseQuickReplies } from "@/lib/quick-replies";
 import { stripMentions } from "@/lib/mentions";
@@ -118,12 +118,9 @@ export async function POST(
     (m) => m.role === "assistant" && m.agentId === agent.id && m.status === "complete"
   );
 
-  // Load quick replies config to append instruction to personality
-  const quickRepliesConfig = await loadQuickRepliesConfig();
-  const quickRepliesEnabled = quickRepliesConfig.enabled;
-  const effectivePersonality = quickRepliesEnabled
-    ? (agent.personality ?? "") + QUICK_REPLY_INSTRUCTION
-    : agent.personality;
+  const quickRepliesConfig = await loadQuickReplies();
+  const quickRepliesSuffix = quickRepliesConfig.enabled ? QUICK_REPLY_INSTRUCTION : "";
+  const effectivePersonality = (agent.personality ?? "") + quickRepliesSuffix;
 
   const cleanPrompt = stripMentions(prompt, thread.agents);
   const enrichedPrompt = buildContextualPrompt(thread.messages, agent.id, thread.agents, cleanPrompt);
@@ -234,7 +231,7 @@ export async function POST(
             // Parse and strip <QuickReply> tags from content
             let finalContent = accumulatedContent;
             let inlineSuggestions: string[] = [];
-            if (quickRepliesEnabled && status === "complete") {
+            if (status === "complete") {
               const parsed = parseQuickReplies(accumulatedContent);
               finalContent = parsed.cleaned;
               inlineSuggestions = parsed.suggestions;

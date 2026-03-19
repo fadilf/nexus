@@ -1,7 +1,7 @@
 export const QUICK_REPLY_INSTRUCTION = `\nAfter responding, append exactly one <QuickReply> block containing 1-3 brief follow-up suggestions the user might send. Put each suggestion inside its own <Option> tag, and do not output any text after </QuickReply>.\n<QuickReply>\n<Option>suggestion text</Option>\n<Option>another suggestion</Option>\n</QuickReply>`;
 
-const QUICK_REPLY_BLOCK_REGEX = /<QuickReply>[\s\S]*?<\/QuickReply>/g;
-const QUICK_REPLY_TAIL_REGEX = /<QuickReply>[\s\S]*$/;
+const CLOSE_TAG = "</QuickReply>";
+const OPEN_TAG = "<QuickReply>";
 const OPTION_REGEX = /<Option>([\s\S]*?)<\/Option>/g;
 
 function extractOptions(content: string): string[] {
@@ -11,23 +11,28 @@ function extractOptions(content: string): string[] {
 }
 
 /**
- * Extract suggestion strings from content containing <QuickReply> tags.
- * Returns the suggestions and the content with tags stripped.
+ * Only parses quick replies if the content ends with a well-formed, closed
+ * <QuickReply>...</QuickReply> block. Dangling/incomplete blocks are never
+ * parsed. If multiple blocks exist, only the very last one is considered —
+ * and only if it is the last thing in the content.
  */
 export function parseQuickReplies(content: string): { cleaned: string; suggestions: string[] } {
-  const suggestions = Array.from(content.matchAll(QUICK_REPLY_BLOCK_REGEX))
-    .flatMap((match) => extractOptions(match[0]));
+  const trimmed = content.trimEnd();
 
-  let cleaned = content.replace(QUICK_REPLY_BLOCK_REGEX, "");
-  const danglingBlock = cleaned.match(QUICK_REPLY_TAIL_REGEX)?.[0];
-  if (danglingBlock) {
-    suggestions.push(...extractOptions(danglingBlock));
-    cleaned = cleaned.replace(QUICK_REPLY_TAIL_REGEX, "");
+  // Must end with the close tag
+  if (!trimmed.endsWith(CLOSE_TAG)) {
+    return { cleaned: content, suggestions: [] };
   }
 
-  const dedupedSuggestions = suggestions.filter(
-    (text, index) => suggestions.indexOf(text) === index
-  );
+  // Find the last opening tag — that's the start of the only block we care about
+  const lastOpen = trimmed.lastIndexOf(OPEN_TAG);
+  if (lastOpen === -1) {
+    return { cleaned: content, suggestions: [] };
+  }
 
-  return { cleaned: cleaned.trimEnd(), suggestions: dedupedSuggestions.slice(0, 3) };
+  const block = trimmed.slice(lastOpen);
+  const suggestions = extractOptions(block);
+  const cleaned = trimmed.slice(0, lastOpen).trimEnd();
+
+  return { cleaned, suggestions: suggestions.slice(0, 3) };
 }

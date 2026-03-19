@@ -24,7 +24,6 @@ export default function ThreadDetail({
   onRewind,
   onResendMessage,
   suggestions,
-  suggestionsLoading,
   onSuggestionSelect,
   onDraftChange,
 }: {
@@ -41,7 +40,6 @@ export default function ThreadDetail({
   onRewind?: (messageId: string, options?: { keepMessage?: boolean }) => void;
   onResendMessage?: (message: Message) => void;
   suggestions?: string[];
-  suggestionsLoading?: boolean;
   onSuggestionSelect?: (text: string) => void;
   onDraftChange?: (hasText: boolean) => void;
 }) {
@@ -112,7 +110,7 @@ export default function ThreadDetail({
     (m) => !(m.status === "streaming" && m.agentId && streamingAgentIds.has(m.agentId))
   );
   const allMessages = [...filteredMessages, ...streamingMsgs];
-  const hasQuickReplies = (suggestions?.length ?? 0) > 0 || !!suggestionsLoading;
+  const hasQuickReplies = (suggestions?.length ?? 0) > 0;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -204,7 +202,7 @@ export default function ThreadDetail({
       <div className="border-t border-zinc-200 dark:border-zinc-700">
         <QuickReplies
           suggestions={suggestions ?? []}
-          loading={suggestionsLoading ?? false}
+          loading={false}
           onSelect={(text) => onSuggestionSelect?.(text)}
           className={`${isMobile ? "px-4" : "px-6"} pt-2 pb-0.5`}
         />
