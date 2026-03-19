@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Message } from "@/lib/types";
 import { parseQuickReplies } from "@/lib/quick-replies";
@@ -139,7 +139,7 @@ function MarkdownBlock({ content, isStreaming }: { content: string; isStreaming?
   );
 }
 
-export default function ChatMessage({
+export default memo(function ChatMessage({
   message,
   isUser,
   onContextMenu,
@@ -249,4 +249,4 @@ export default function ChatMessage({
       )}
     </div>
   );
-}
+});

@@ -259,7 +259,7 @@ export default function Home() {
 
   const handleDraftChange = useCallback((hasText: boolean) => {
     if (hasText) {
-      setSuggestions([]);
+      setSuggestions((prev) => (prev.length === 0 ? prev : []));
     }
   }, []);
 
