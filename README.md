@@ -4,15 +4,43 @@ A multi-agent coding tool with a unified chat UI. Entourage spawns CLI subproces
 
 Create custom agent profiles with distinct names, icons, colors, and personality system prompts. Use @mentions to route messages to specific agents within a thread.
 
+<!-- TODO: replace with actual screenshot -->
+![Multi-agent chat](docs/screenshots/hero.png)
+
 ## Features
 
-- **Multi-agent chat** — Talk to Claude, Gemini, Codex, OpenCode, or custom agents in the same thread
-- **Custom agent profiles** — Configure names, icons, colors, and system prompts
-- **@mentions** — Route messages to specific agents
-- **Git integration** — View diffs, stage/unstage files, commit, pull, and push from a built-in source control panel
+### Multi-agent chat with @mentions
+
+Talk to Claude, Gemini, Codex, OpenCode, or custom agents in the same thread. Use @mentions to route messages to specific agents.
+
+<!-- TODO: replace with actual screenshot -->
+![Agent @mention autocomplete](docs/screenshots/mentions.png)
+
+### Custom agent profiles
+
+Configure names, models, icons, colors, and personality system prompts to create agents tailored to your workflow.
+
+<!-- TODO: replace with actual screenshot -->
+![Agent profile configuration](docs/screenshots/agent-profiles.png)
+
+### Built-in Git integration
+
+View diffs, stage/unstage files, commit, pull, and push — all from a built-in source control panel without leaving the chat.
+
+<!-- TODO: replace with actual screenshot -->
+![Git integration panel](docs/screenshots/git.png)
+
+### File browser
+
+Browse workspace files with syntax highlighting and image/PDF preview.
+
+<!-- TODO: replace with actual screenshot -->
+![File browser with preview](docs/screenshots/file-browser.png)
+
+### And more
+
 - **Code snapshots & revert** — Automatically snapshots workspace state so you can revert files to before any agent message
 - **MCP server support** — Connect external MCP servers and use interactive tools rendered inline in conversations
-- **File browser** — Browse workspace files with syntax highlighting and image/PDF preview
 - **Image attachments** — Drag-and-drop or click to attach images to messages
 - **Conversation rewind** — Jump back to any point in a thread's history
 - **Thread management** — Create, rename, archive, and organize conversations
@@ -89,9 +117,12 @@ npx @fadilf/entourage@latest -H 0.0.0.0 -p 8080  # both
 
 ### Remote Access with Tailscale
 
-If you run Entourage with `-H 0.0.0.0`, you can reach it remotely over your [Tailscale](https://tailscale.com/) tailnet from your other devices without putting it on the public internet.
+Run Entourage on your laptop or a VPS, then pick up where you left off from your phone, tablet, or any other device. With `-H 0.0.0.0`, you can reach it remotely over your [Tailscale](https://tailscale.com/) tailnet without putting it on the public internet.
 
-If you enable [Tailscale Funnel](https://tailscale.com/kb/1223/funnel), you can also expose it through a public HTTPS URL. Since Entourage includes a web app manifest and installable PWA support, opening that Funnel URL on your phone or tablet lets you install it for a more app-like experience.
+Enable [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) to expose it through a public HTTPS URL. Since Entourage includes a web app manifest and installable PWA support, opening that URL on your phone lets you install it as a standalone app.
+
+<!-- TODO: replace with actual screenshot — side-by-side of desktop and mobile showing the same conversation -->
+![Desktop and mobile side by side](docs/screenshots/desktop-mobile.png)
 
 ### Install Globally
 
