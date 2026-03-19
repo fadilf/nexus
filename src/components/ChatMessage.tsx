@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Message } from "@/lib/types";
 import { parseQuickReplies } from "@/lib/quick-replies";
@@ -9,6 +9,7 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import { useWsParam } from "@/contexts/WorkspaceContext";
 import ToolCallBlock from "./ToolCallBlock";
+import McpAppBlock from "./McpAppBlock";
 
 function renderMentions(content: string) {
   const parts = content.split(/(@\w+)/g);
@@ -138,7 +139,7 @@ function MarkdownBlock({ content, isStreaming }: { content: string; isStreaming?
   );
 }
 
-export default function ChatMessage({
+export default memo(function ChatMessage({
   message,
   isUser,
   onContextMenu,
@@ -194,6 +195,15 @@ export default function ChatMessage({
           {sanitizedBlocks.map((block, i) =>
             block.type === "tool_call" ? (
               <ToolCallBlock key={block.toolCall.id} toolCall={block.toolCall} />
+            ) : block.type === "mcp_app" ? (
+              <McpAppBlock
+                key={`mcp-${block.toolName}-${i}`}
+                toolName={block.toolName}
+                serverId={block.serverId}
+                toolInput={block.toolInput}
+                toolResult={block.toolResult}
+                html={block.html}
+              />
             ) : (
               <MarkdownBlock key={i} content={block.text} isStreaming={isStreaming} />
             )
@@ -239,4 +249,4 @@ export default function ChatMessage({
       )}
     </div>
   );
-}
+});

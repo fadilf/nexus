@@ -259,7 +259,7 @@ export default function Home() {
 
   const handleDraftChange = useCallback((hasText: boolean) => {
     if (hasText) {
-      setSuggestions([]);
+      setSuggestions((prev) => (prev.length === 0 ? prev : []));
     }
   }, []);
 
@@ -315,6 +315,8 @@ export default function Home() {
 
   useEffect(() => {
     fetchGitBadge();
+    const interval = setInterval(fetchGitBadge, 5000);
+    return () => clearInterval(interval);
   }, [fetchGitBadge]);
 
   const handlePluginClick = useCallback((pluginId: string) => {

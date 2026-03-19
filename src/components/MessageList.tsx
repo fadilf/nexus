@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Message, Agent } from "@/lib/types";
 import MessageGroup, { MessageGroupData } from "./MessageGroup";
 
@@ -27,7 +28,7 @@ export function groupMessages(messages: Message[]): MessageGroupData[] {
   return groups;
 }
 
-export default function MessageList({
+export default memo(function MessageList({
   messages,
   agents,
   displayName,
@@ -65,4 +66,4 @@ export default function MessageList({
       })}
     </>
   );
-}
+});

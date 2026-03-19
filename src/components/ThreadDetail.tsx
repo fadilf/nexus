@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ThreadWithMessages, Agent, Message, MessageImage } from "@/lib/types";
 import { ChevronLeft, Copy, Pencil, RotateCcw, Send } from "lucide-react";
 import Dialog from "./Dialog";
@@ -76,6 +76,34 @@ export default function ThreadDetail({
     setContextMenu({ x, y, message });
   }, []);
 
+  // Build streaming messages as Message objects for display
+  const allMessages = useMemo(() => {
+    if (!thread) return [];
+    const streamingMsgs: Message[] = Array.from(streamingMessages.entries()).map(
+      ([agentId, data]) => ({
+        id: `streaming-${agentId}`,
+        threadId: thread.id,
+        role: "assistant" as const,
+        agentId,
+        content: data.content.replace(/<QuickReply>[\s\S]*$/,  "").trimEnd(),
+        timestamp: new Date().toISOString(),
+        status: "streaming" as const,
+        ...(data.toolCalls?.length ? { toolCalls: data.toolCalls } : {}),
+        ...(data.contentBlocks?.length ? { contentBlocks: data.contentBlocks.map(b =>
+          b.type === "text" ? { ...b, text: b.text.replace(/<QuickReply>[\s\S]*$/, "").trimEnd() } : b
+        ) } : {}),
+        ...(data.isReattach ? { isReattach: true } : {}),
+      })
+    );
+
+    // When reattaching, replace the persisted streaming message with the live one
+    const streamingAgentIds = new Set(streamingMessages.keys());
+    const filteredMessages = thread.messages.filter(
+      (m) => !(m.status === "streaming" && m.agentId && streamingAgentIds.has(m.agentId))
+    );
+    return [...filteredMessages, ...streamingMsgs];
+  }, [thread, streamingMessages]);
+
   if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center text-zinc-400 dark:text-zinc-500">
@@ -84,30 +112,6 @@ export default function ThreadDetail({
     );
   }
 
-  // Build streaming messages as Message objects for display
-  const streamingMsgs: Message[] = Array.from(streamingMessages.entries()).map(
-    ([agentId, data]) => ({
-      id: `streaming-${agentId}`,
-      threadId: thread.id,
-      role: "assistant" as const,
-      agentId,
-      content: data.content.replace(/<QuickReply>[\s\S]*$/,  "").trimEnd(),
-      timestamp: new Date().toISOString(),
-      status: "streaming" as const,
-      ...(data.toolCalls?.length ? { toolCalls: data.toolCalls } : {}),
-      ...(data.contentBlocks?.length ? { contentBlocks: data.contentBlocks.map(b =>
-        b.type === "text" ? { ...b, text: b.text.replace(/<QuickReply>[\s\S]*$/, "").trimEnd() } : b
-      ) } : {}),
-      ...(data.isReattach ? { isReattach: true } : {}),
-    })
-  );
-
-  // When reattaching, replace the persisted streaming message with the live one
-  const streamingAgentIds = new Set(streamingMessages.keys());
-  const filteredMessages = thread.messages.filter(
-    (m) => !(m.status === "streaming" && m.agentId && streamingAgentIds.has(m.agentId))
-  );
-  const allMessages = [...filteredMessages, ...streamingMsgs];
   const hasQuickReplies = (suggestions?.length ?? 0) > 0;
 
   return (
