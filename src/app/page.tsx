@@ -12,6 +12,7 @@ import WorkspaceBar from "@/components/WorkspaceBar";
 import AddWorkspaceDialog from "@/components/AddWorkspaceDialog";
 import GitDialog from "@/components/GitDialog";
 import FileBrowserDialog from "@/components/FileBrowserDialog";
+import MobileMenuDrawer from "@/components/MobileMenuDrawer";
 import { WorkspaceProvider } from "@/contexts/WorkspaceContext";
 import { PLUGINS } from "@/lib/plugins";
 
@@ -77,6 +78,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [showGitDialog, setShowGitDialog] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>([]);
   const [gitChangeCount, setGitChangeCount] = useState(0);
   const [gitIsRepo, setGitIsRepo] = useState(true);
@@ -471,7 +473,7 @@ export default function Home() {
       selectedThreadId={selectedThreadId}
       onSelectThread={setSelectedThreadId}
       onNewThread={() => setShowNewThread(true)}
-      onOpenSettings={() => setShowSettings(true)}
+      onOpenMenu={() => setShowMobileMenu(true)}
       onArchiveThread={handleArchiveThread}
       statuses={statuses}
       unreadByThread={unreadByThread}
@@ -585,6 +587,21 @@ export default function Home() {
         onClose={() => setShowFileBrowser(false)}
         workspaceId={activeWorkspaceId}
       />
+      {isMobile && (
+        <MobileMenuDrawer
+          open={showMobileMenu}
+          onClose={() => setShowMobileMenu(false)}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          onSelectWorkspace={handleSelectWorkspace}
+          onAddWorkspace={() => setShowAddWorkspace(true)}
+          onOpenSettings={() => setShowSettings(true)}
+          enabledPlugins={enabledPlugins}
+          onPluginClick={handlePluginClick}
+          gitChangeCount={gitChangeCount}
+          gitIsRepo={gitIsRepo}
+        />
+      )}
     </div>
     </WorkspaceProvider>
   );
