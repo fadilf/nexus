@@ -36,7 +36,7 @@ export default function ThreadDetail({
   displayName?: string;
   isMobile?: boolean;
   onBack?: () => void;
-  onRewind?: (messageId: string, options?: { keepMessage?: boolean }) => void;
+  onRewind?: (messageId: string, options?: { keepMessage?: boolean; revertCode?: boolean }) => void;
   onResendMessage?: (message: Message) => void;
   suggestions?: string[];
   onSuggestionSelect?: (text: string) => void;
@@ -47,6 +47,7 @@ export default function ThreadDetail({
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: Message } | null>(null);
   const [rewindConfirm, setRewindConfirm] = useState<string | null>(null);
+  const [revertCode, setRevertCode] = useState(false);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -226,33 +227,51 @@ export default function ThreadDetail({
           ]}
         />
       )}
-      {rewindConfirm && (
-        <Dialog open={!!rewindConfirm} onClose={() => setRewindConfirm(null)}>
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-6 shadow-xl">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Rewind conversation?</h3>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Messages after this point will be permanently deleted.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setRewindConfirm(null)}
-                className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onRewind?.(rewindConfirm);
-                  setRewindConfirm(null);
-                }}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Rewind
-              </button>
+      {rewindConfirm && (() => {
+        const messages = allMessages;
+        const hasSnapshots = messages
+          .slice(messages.findIndex((m) => m.id === rewindConfirm) + 1)
+          .some((m) => m.snapshotTreeHash);
+        return (
+          <Dialog open={!!rewindConfirm} onClose={() => { setRewindConfirm(null); setRevertCode(false); }}>
+            <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-6 shadow-xl">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Rewind conversation?</h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Messages after this point will be permanently deleted.
+              </p>
+              {hasSnapshots && (
+                <label className="flex items-center gap-2 text-sm text-zinc-400 mt-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={revertCode}
+                    onChange={(e) => setRevertCode(e.target.checked)}
+                    className="rounded border-zinc-600"
+                  />
+                  Also revert code changes
+                </label>
+              )}
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => { setRewindConfirm(null); setRevertCode(false); }}
+                  className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onRewind?.(rewindConfirm, { keepMessage: true, revertCode });
+                    setRewindConfirm(null);
+                    setRevertCode(false);
+                  }}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                >
+                  Rewind
+                </button>
+              </div>
             </div>
-          </div>
-        </Dialog>
-      )}
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }

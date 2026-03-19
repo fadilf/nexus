@@ -445,12 +445,12 @@ export default function Home() {
   );
 
   const rewindThread = useCallback(
-    async (messageId: string, keepMessage = true) => {
+    async (messageId: string, keepMessage = true, revertCode = false) => {
       if (!selectedThreadId) return;
       const res = await fetch(wsUrl(`/api/threads/${selectedThreadId}/rewind`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messageId, keepMessage }),
+        body: JSON.stringify({ messageId, keepMessage, revertCode }),
       });
       if (!res.ok) return null;
       const updated = await res.json();
@@ -462,8 +462,8 @@ export default function Home() {
   );
 
   const handleRewind = useCallback(
-    async (messageId: string, options?: { keepMessage?: boolean }) => {
-      await rewindThread(messageId, options?.keepMessage ?? true);
+    async (messageId: string, options?: { keepMessage?: boolean; revertCode?: boolean }) => {
+      await rewindThread(messageId, options?.keepMessage ?? true, options?.revertCode ?? false);
     },
     [rewindThread]
   );
