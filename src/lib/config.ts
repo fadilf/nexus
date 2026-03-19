@@ -53,7 +53,12 @@ export function getCliCommand(model: string, prompt: string, sessionId: string, 
   }
 
   if (model === "claude") {
-    const args = ["-p", fullPrompt, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions", "--chrome"];
+    const args = ["-p", fullPrompt, "--output-format", "stream-json", "--verbose"];
+    // --dangerously-skip-permissions cannot be used as root
+    const isRoot = process.getuid?.() === 0;
+    if (!isRoot) {
+      args.push("--dangerously-skip-permissions");
+    }
     if (isResume) {
       args.push("--resume", sessionId);
     } else {
