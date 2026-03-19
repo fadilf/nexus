@@ -76,29 +76,51 @@ export default function GitDialog({
   };
 
   const handleStage = async (path: string) => {
+    // Optimistically move file from unstaged to staged
+    setStatus((prev) => {
+      if (!prev) return prev;
+      const file = prev.unstaged.find((f) => f.path === path);
+      if (!file) return prev;
+      return {
+        ...prev,
+        staged: [...prev.staged, file],
+        unstaged: prev.unstaged.filter((f) => f.path !== path),
+      };
+    });
+    if (selectedFile === path) {
+      setSelectedStaged(true);
+      fetchDiff(path, true);
+    }
     await fetch(`/api/git/stage${wsParam}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ files: [path], action: "stage" }),
     });
     await fetchStatus();
-    if (selectedFile === path) {
-      setSelectedStaged(true);
-      fetchDiff(path, true);
-    }
   };
 
   const handleUnstage = async (path: string) => {
+    // Optimistically move file from staged to unstaged
+    setStatus((prev) => {
+      if (!prev) return prev;
+      const file = prev.staged.find((f) => f.path === path);
+      if (!file) return prev;
+      return {
+        ...prev,
+        staged: prev.staged.filter((f) => f.path !== path),
+        unstaged: [...prev.unstaged, file],
+      };
+    });
+    if (selectedFile === path) {
+      setSelectedStaged(false);
+      fetchDiff(path, false);
+    }
     await fetch(`/api/git/stage${wsParam}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ files: [path], action: "unstage" }),
     });
     await fetchStatus();
-    if (selectedFile === path) {
-      setSelectedStaged(false);
-      fetchDiff(path, false);
-    }
   };
 
   const handleCommit = async () => {
