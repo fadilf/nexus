@@ -388,7 +388,7 @@ export default function SettingsDialog({
               {/* Quick Replies */}
               <div className="flex items-center justify-between px-3 py-2.5">
                 <div>
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Quick Replies</span>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Quick Replies <span className="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-600 dark:bg-violet-900/40 dark:text-violet-400">beta</span></span>
                   <p className="text-xs text-zinc-400 dark:text-zinc-500">Suggest follow-up replies after agents respond</p>
                 </div>
                 <button
@@ -539,7 +539,7 @@ export default function SettingsDialog({
             </div>
           ) : tab === "mcp" ? (
             <div className="space-y-4">
-              <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">MCP Servers</h4>
+              <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">MCP Servers <span className="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-600 dark:bg-violet-900/40 dark:text-violet-400">beta</span></h4>
               <p className="text-xs text-zinc-400 dark:text-zinc-500">
                 Connect to MCP servers that provide interactive app UIs for their tools.
               </p>
