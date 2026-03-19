@@ -2,6 +2,7 @@
 
 import { X, ExternalLink, Github } from "lucide-react";
 import Logo from "@/components/Logo";
+import pkg from "@/../package.json";
 
 type Props = {
   open: boolean;
@@ -9,7 +10,6 @@ type Props = {
 };
 
 const REPO_URL = "https://github.com/fadilf/entourage";
-const VERSION = "0.1.0";
 
 export default function AboutDialog({ open, onClose }: Props) {
   if (!open) return null;
@@ -28,7 +28,7 @@ export default function AboutDialog({ open, onClose }: Props) {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Entourage</h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">v{VERSION}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">v{pkg.version}</p>
             </div>
           </div>
           <button
@@ -43,6 +43,17 @@ export default function AboutDialog({ open, onClose }: Props) {
         <div className="px-5 py-3">
           <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
             A multi-agent coding tool with a unified chat UI for real-time streaming conversations. Spawn CLI agents against local project directories.
+          </p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
+            Made by{" "}
+            <a
+              href="https://fadileledath.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-600 dark:text-violet-400 hover:underline"
+            >
+              Fadil Eledath
+            </a>
           </p>
         </div>
 

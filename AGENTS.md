@@ -8,6 +8,11 @@
 
 No test framework is configured.
 
+## Publishing
+
+- Before `npm publish`, bump the version using `npm version patch` (fixes) or `npm version minor` (features)
+- This auto-updates `package.json` and creates a git commit + tag
+
 ## Architecture
 
 Entourage is a multi-agent coding tool that spawns CLI subprocesses (Claude CLI, Gemini CLI) against a local project directory, with a unified chat UI for real-time streaming conversations. Users can create custom agent profiles with distinct names, icons, colors, and personality system prompts.

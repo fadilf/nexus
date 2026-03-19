@@ -315,6 +315,8 @@ export default function Home() {
 
   useEffect(() => {
     fetchGitBadge();
+    const interval = setInterval(fetchGitBadge, 5000);
+    return () => clearInterval(interval);
   }, [fetchGitBadge]);
 
   const handlePluginClick = useCallback((pluginId: string) => {
