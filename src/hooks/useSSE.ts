@@ -28,6 +28,8 @@ export function useAgentStream(
   onCompleteRef.current = onStreamComplete;
   const onSuggestionsRef = useRef(onInlineSuggestions);
   onSuggestionsRef.current = onInlineSuggestions;
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
   const workspaceIdRef = useRef(workspaceId);
   workspaceIdRef.current = workspaceId;
 
@@ -151,7 +153,9 @@ export function useAgentStream(
                   triggerRender();
                 }
               } else if (event.type === "suggestions") {
-                onSuggestionsRef.current?.(event.suggestions);
+                if (targetThreadId === threadIdRef.current) {
+                  onSuggestionsRef.current?.(event.suggestions);
+                }
               } else if (event.type === "done") {
                 break;
               } else if (event.type === "error") {
@@ -320,7 +324,9 @@ export function useAgentStream(
                   triggerRender();
                 }
               } else if (event.type === "suggestions") {
-                onSuggestionsRef.current?.(event.suggestions);
+                if (reattachThreadId === threadIdRef.current) {
+                  onSuggestionsRef.current?.(event.suggestions);
+                }
               } else if (event.type === "done") {
                 break;
               } else if (event.type === "error") {
