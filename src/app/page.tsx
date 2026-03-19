@@ -70,6 +70,7 @@ export default function Home() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [showAddWorkspace, setShowAddWorkspace] = useState(false);
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<ThreadProcess[]>([]);
@@ -112,8 +113,9 @@ export default function Home() {
         const saved = localStorage.getItem("entourage-active-workspace");
         const match = ws.find((w) => w.id === saved);
         setActiveWorkspaceId(match ? match.id : ws[0]?.id ?? null);
+        setWorkspacesLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => { setWorkspacesLoaded(true); });
   }, []);
 
   // Persist active workspace
@@ -526,6 +528,58 @@ export default function Home() {
     setSelectedThreadId(null);
     setShowAddWorkspace(false);
   }, []);
+
+  if (!workspacesLoaded) {
+    return (
+      <div className="flex h-dvh overflow-hidden bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
+        {/* Mobile skeleton */}
+        <div className="flex flex-col w-full animate-pulse md:hidden">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700" />
+            <div className="h-5 w-32 rounded bg-zinc-200 dark:bg-zinc-700" />
+          </div>
+          <div className="flex flex-col gap-2 p-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-3">
+                <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 rounded bg-zinc-200 dark:bg-zinc-700" style={{ width: `${60 + (i % 3) * 15}%` }} />
+                  <div className="h-3 rounded bg-zinc-100 dark:bg-zinc-800" style={{ width: `${40 + (i % 4) * 10}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Desktop skeleton */}
+        <div className="hidden md:contents">
+          <div className="flex flex-col items-center gap-2 py-3 px-2 border-r border-zinc-200 dark:border-zinc-800 w-16 shrink-0 animate-pulse">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="w-10 h-10 rounded-xl bg-zinc-200 dark:bg-zinc-700" />
+            ))}
+          </div>
+          <div className="flex flex-col border-r border-zinc-200 dark:border-zinc-800 animate-pulse" style={{ width: SIDEBAR_DEFAULT }}>
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="h-5 w-24 rounded bg-zinc-200 dark:bg-zinc-700" />
+            </div>
+            <div className="flex flex-col gap-2 p-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-3">
+                  <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 rounded bg-zinc-200 dark:bg-zinc-700" style={{ width: `${60 + (i % 3) * 15}%` }} />
+                    <div className="h-3 rounded bg-zinc-100 dark:bg-zinc-800" style={{ width: `${40 + (i % 4) * 10}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="h-4 w-48 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (workspaces.length === 0) {
     return (
