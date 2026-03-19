@@ -12,8 +12,18 @@ type PendingImage = {
   preview: string;
 };
 
+type StoredImage = {
+  name: string;
+  type: string;
+  dataUrl: string;
+};
+
 function getDraftStorageKey(workspaceId: string | null, threadId: string): string {
   return `entourage-message-draft:${workspaceId ?? "default"}:${threadId}`;
+}
+
+function getImageDraftStorageKey(workspaceId: string | null, threadId: string): string {
+  return `entourage-image-draft:${workspaceId ?? "default"}:${threadId}`;
 }
 
 function readDraft(storageKey: string): string {
@@ -37,6 +47,59 @@ function writeDraft(storageKey: string, value: string): void {
     }
   } catch {
     // Ignore localStorage errors and keep the in-memory draft working.
+  }
+}
+
+function readImageDraft(storageKey: string): PendingImage[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const stored: StoredImage[] = JSON.parse(raw);
+    return stored.map((img) => {
+      const byteString = atob(img.dataUrl.split(",")[1]);
+      const mimeString = img.dataUrl.split(",")[0].split(":")[1].split(";")[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const file = new File([ab], img.name, { type: mimeString });
+      return { file, preview: URL.createObjectURL(file) };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function writeImageDraft(storageKey: string, images: PendingImage[]): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (images.length === 0) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+    const stored: StoredImage[] = await Promise.all(
+      images.map(async (img) => ({
+        name: img.file.name,
+        type: img.file.type,
+        dataUrl: await fileToDataUrl(img.file),
+      }))
+    );
+    localStorage.setItem(storageKey, JSON.stringify(stored));
+  } catch {
+    // Ignore localStorage errors (e.g. quota exceeded for large images).
   }
 }
 
@@ -66,10 +129,11 @@ export default function MessageInput({
   const workspaceId = useWorkspaceId();
   const wsParam = useWsParam();
   const draftStorageKey = getDraftStorageKey(workspaceId, threadId);
+  const imageDraftStorageKey = getImageDraftStorageKey(workspaceId, threadId);
   const [content, setContent] = useState(() => readDraft(draftStorageKey));
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
-  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>(() => readImageDraft(imageDraftStorageKey));
   const [uploading, setUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -121,17 +185,22 @@ export default function MessageInput({
       file,
       preview: URL.createObjectURL(file),
     }));
-    setPendingImages((prev) => [...prev, ...newImages]);
-  }, []);
+    setPendingImages((prev) => {
+      const next = [...prev, ...newImages];
+      writeImageDraft(imageDraftStorageKey, next);
+      return next;
+    });
+  }, [imageDraftStorageKey]);
 
   const removeImage = useCallback((index: number) => {
     setPendingImages((prev) => {
       const next = [...prev];
       URL.revokeObjectURL(next[index].preview);
       next.splice(index, 1);
+      writeImageDraft(imageDraftStorageKey, next);
       return next;
     });
-  }, []);
+  }, [imageDraftStorageKey]);
 
   const uploadImages = useCallback(async (images: PendingImage[]): Promise<MessageImage[]> => {
     const formData = new FormData();
@@ -159,13 +228,14 @@ export default function MessageInput({
       // Clean up previews
       pendingImages.forEach((img) => URL.revokeObjectURL(img.preview));
       setPendingImages([]);
+      writeImageDraft(imageDraftStorageKey, []);
       setUploading(false);
     }
 
     onSendMessage(content.trim(), images);
     updateDraft("");
     setShowMentions(false);
-  }, [canSend, content, pendingImages, onSendMessage, uploadImages, updateDraft]);
+  }, [canSend, content, pendingImages, onSendMessage, uploadImages, updateDraft, imageDraftStorageKey]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {

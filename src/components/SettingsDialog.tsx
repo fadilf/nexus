@@ -52,7 +52,6 @@ export default function SettingsDialog({
   const [savedDisplayName, setSavedDisplayName] = useState("");
   const [plugins, setPlugins] = useState<Record<string, boolean>>({});
   const [quickRepliesEnabled, setQuickRepliesEnabled] = useState(false);
-  const [quickRepliesAgentId, setQuickRepliesAgentId] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
@@ -70,7 +69,6 @@ export default function SettingsDialog({
       setPlugins(data.plugins || {});
       if (data.quickReplies) {
         setQuickRepliesEnabled(data.quickReplies.enabled);
-        setQuickRepliesAgentId(data.quickReplies.agentId);
       }
     }
   }, []);
@@ -403,31 +401,6 @@ export default function SettingsDialog({
                 </button>
               </div>
 
-              {quickRepliesEnabled && (
-                <div className="flex items-center justify-between px-3 py-2.5">
-                  <div>
-                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Suggestion Agent</span>
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500">Which agent generates suggestions</p>
-                  </div>
-                  <select
-                    value={quickRepliesAgentId}
-                    onChange={async (e) => {
-                      const agentId = e.target.value;
-                      setQuickRepliesAgentId(agentId);
-                      await fetch("/api/config", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ quickRepliesAgentId: agentId }),
-                      });
-                    }}
-                    className="rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                  >
-                    {agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>{agent.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </div>
           ) : tab === "agents" ? (
             <div className="space-y-1">

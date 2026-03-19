@@ -84,8 +84,6 @@ export default function Home() {
   const [gitIsRepo, setGitIsRepo] = useState(true);
   const streamCompleteThreadId = useRef<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const suggestionsAbortRef = useRef<AbortController | null>(null);
 
   // Resizable sidebar
   const SIDEBAR_MIN = 240;
@@ -161,9 +159,10 @@ export default function Home() {
   }, [sidebarWidth]);
 
   const configUrl = "/api/config";
-  const [config, , refetchConfig] = useFetch<{ agents: Agent[]; displayName?: string }>(configUrl);
+  const [config, , refetchConfig] = useFetch<{ agents: Agent[]; displayName?: string; quickReplies?: { enabled: boolean } }>(configUrl);
   const agents = config?.agents ?? [];
   const displayName = config?.displayName ?? "You";
+  const quickRepliesEnabled = config?.quickReplies?.enabled ?? false;
 
   useEffect(() => {
     if (!config) return;
@@ -181,42 +180,9 @@ export default function Home() {
   const threadUrl = selectedThreadId ? wsUrl(`/api/threads/${selectedThreadId}`) : null;
   const [selectedThread, setSelectedThread, refetchThread] = useFetch<ThreadWithMessages>(threadUrl);
 
-  const fetchSuggestions = useCallback(async (threadId: string, workspaceId: string) => {
-    suggestionsAbortRef.current?.abort();
-    const controller = new AbortController();
-    suggestionsAbortRef.current = controller;
-
-    setSuggestionsLoading(true);
-    setSuggestions([]);
-
-    try {
-      const configRes = await fetch("/api/config", { signal: controller.signal });
-      if (!configRes.ok) { setSuggestionsLoading(false); return; }
-      const config = await configRes.json();
-      if (!config.quickReplies?.enabled) { setSuggestionsLoading(false); return; }
-
-      const res = await fetch(
-        `/api/threads/${threadId}/suggestions?workspaceId=${workspaceId}`,
-        { method: "POST", signal: controller.signal }
-      );
-      if (!res.ok) { setSuggestionsLoading(false); return; }
-      const data = await res.json();
-      if (!controller.signal.aborted) {
-        setSuggestions(data.suggestions ?? []);
-      }
-    } catch {
-      // AbortError or network error — ignore
-    } finally {
-      if (!controller.signal.aborted) {
-        setSuggestionsLoading(false);
-      }
-    }
-  }, []);
-
   const handleInlineSuggestions = useCallback((inlineSuggestions: string[]) => {
     if (inlineSuggestions.length > 0) {
       setSuggestions(inlineSuggestions);
-      setSuggestionsLoading(false);
     }
   }, []);
 
@@ -224,16 +190,11 @@ export default function Home() {
     (completedThreadId: string) => {
       streamCompleteThreadId.current = completedThreadId;
       refetchThreads();
-      // If the completed thread is currently selected, also refetch its messages
       if (completedThreadId === selectedThreadId) {
         refetchThread();
       }
-      // Only fetch suggestions via separate API if no inline suggestions arrived
-      if (suggestions.length === 0 && activeWorkspaceId) {
-        fetchSuggestions(completedThreadId, activeWorkspaceId);
-      }
     },
-    [selectedThreadId, refetchThread, refetchThreads, activeWorkspaceId, fetchSuggestions, suggestions.length]
+    [selectedThreadId, refetchThread, refetchThreads]
   );
 
   const { streamingMessages, isStreaming, sendMessage, stopAgent, reattach } = useAgentStream(
@@ -273,9 +234,7 @@ export default function Home() {
 
   // Clear suggestions on thread switch
   useEffect(() => {
-    suggestionsAbortRef.current?.abort();
     setSuggestions([]);
-    setSuggestionsLoading(false);
     lastRestoredThreadId.current = null;
   }, [selectedThreadId]);
   useEffect(() => {
@@ -292,9 +251,7 @@ export default function Home() {
 
   const handleDraftChange = useCallback((hasText: boolean) => {
     if (hasText) {
-      suggestionsAbortRef.current?.abort();
       setSuggestions([]);
-      setSuggestionsLoading(false);
     }
   }, []);
 
@@ -441,9 +398,7 @@ export default function Home() {
 
   const handleSendMessage = useCallback(
     async (content: string, images?: MessageImage[]) => {
-      suggestionsAbortRef.current?.abort();
       setSuggestions([]);
-      setSuggestionsLoading(false);
       await sendUserMessage(content, images);
     },
     [sendUserMessage]
@@ -509,9 +464,7 @@ export default function Home() {
     async (message: Message) => {
       if (message.role !== "user") return;
 
-      suggestionsAbortRef.current?.abort();
       setSuggestions([]);
-      setSuggestionsLoading(false);
 
       const rewound = await rewindThread(message.id, false);
       if (!rewound) return;
@@ -558,8 +511,7 @@ export default function Home() {
       displayName={displayName}
       isMobile={isMobile}
       onBack={isMobile ? () => setSelectedThreadId(null) : undefined}
-      suggestions={suggestions}
-      suggestionsLoading={suggestionsLoading}
+      suggestions={quickRepliesEnabled ? suggestions : []}
       onSuggestionSelect={(text: string) => {
         setSuggestions([]);
         handleSendMessage(text);
