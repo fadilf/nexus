@@ -4,7 +4,6 @@ A multi-agent coding tool with a unified chat UI. Entourage spawns CLI subproces
 
 Create custom agent profiles with distinct names, icons, colors, and personality system prompts. Use @mentions to route messages to specific agents within a thread.
 
-<!-- TODO: replace with actual screenshot -->
 ![Multi-agent chat](docs/screenshots/hero.png)
 
 ## Features
@@ -13,28 +12,24 @@ Create custom agent profiles with distinct names, icons, colors, and personality
 
 Talk to Claude, Gemini, Codex, OpenCode, or custom agents in the same thread. Use @mentions to route messages to specific agents.
 
-<!-- TODO: replace with actual screenshot -->
 ![Agent @mention autocomplete](docs/screenshots/mentions.png)
 
 ### Custom agent profiles
 
 Configure names, models, icons, colors, and personality system prompts to create agents tailored to your workflow.
 
-<!-- TODO: replace with actual screenshot -->
 ![Agent profile configuration](docs/screenshots/agent-profiles.png)
 
 ### Built-in Git integration
 
 View diffs, stage/unstage files, commit, pull, and push — all from a built-in source control panel without leaving the chat.
 
-<!-- TODO: replace with actual screenshot -->
 ![Git integration panel](docs/screenshots/git.png)
 
 ### File browser
 
 Browse workspace files with syntax highlighting and image/PDF preview.
 
-<!-- TODO: replace with actual screenshot -->
 ![File browser with preview](docs/screenshots/file-browser.png)
 
 ### And more
@@ -121,7 +116,6 @@ Run Entourage on your laptop or a VPS, then pick up where you left off from your
 
 Enable [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) to expose it through a public HTTPS URL. Since Entourage includes a web app manifest and installable PWA support, opening that URL on your phone lets you install it as a standalone app.
 
-<!-- TODO: replace with actual screenshot — side-by-side of desktop and mobile showing the same conversation -->
 ![Desktop and mobile side by side](docs/screenshots/desktop-mobile.png)
 
 ### Install Globally
