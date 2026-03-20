@@ -74,7 +74,7 @@ export default function AddWorkspaceDialog({ open, onClose, onAdded, inline }: P
   };
 
   const formContent = (
-    <div className={inline ? "bg-white dark:bg-zinc-800 rounded-xl shadow-2xl w-full max-w-md p-4 md:p-6" : "bg-white dark:bg-zinc-800 rounded-xl shadow-2xl w-full max-w-md p-4 md:p-6 mx-4 max-h-[85vh] flex flex-col"}>
+    <div className={inline ? "bg-white dark:bg-zinc-800 rounded-xl shadow-2xl w-full max-w-md p-4 md:p-6 max-h-[85vh] flex flex-col" : "bg-white dark:bg-zinc-800 rounded-xl shadow-2xl w-full max-w-md p-4 md:p-6 mx-4 max-h-[85vh] flex flex-col"}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Add Workspace</h2>
         {!inline && (

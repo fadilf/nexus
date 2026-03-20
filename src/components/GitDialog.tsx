@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { GitBranch, ArrowDown, ArrowUp, ChevronLeft } from "lucide-react";
+import { GitBranch, ArrowDown, ArrowUp, RefreshCw, ChevronLeft } from "lucide-react";
 import { GitStatus } from "@/lib/types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import Dialog from "./Dialog";
@@ -23,6 +23,7 @@ export default function GitDialog({
   const [diff, setDiff] = useState<string | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
   const [committing, setCommitting] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +147,24 @@ export default function GitDialog({
     }
   };
 
+  const handleFetch = async () => {
+    setFetching(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/git/fetch${wsParam}`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Fetch failed");
+        return;
+      }
+      await fetchStatus();
+    } catch {
+      setError("Fetch failed");
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const handlePull = async () => {
     setPulling(true);
     setError(null);
@@ -215,6 +234,14 @@ export default function GitDialog({
             )}
             {!showMobileDiff && status?.isRepo && (
               <div className="flex items-center gap-1 ml-1 shrink-0">
+                <button
+                  onClick={handleFetch}
+                  disabled={fetching}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Fetch"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+                </button>
                 <button
                   onClick={handlePull}
                   disabled={pulling || (status?.behind === 0)}
