@@ -12,7 +12,7 @@
     "!.next/diagnostics/",
     "!.next/types/",
     "public/",
-    "next.config.ts",
+    "next.config.mjs",
     "package.json"
   ],
   "scripts": {
