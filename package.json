@@ -7,11 +7,12 @@
   "files": [
     "bin/",
     ".next/",
+    "!.next/dev/",
+    "!.next/cache/",
+    "!.next/diagnostics/",
+    "!.next/types/",
     "public/",
-    "src/",
     "next.config.ts",
-    "tsconfig.json",
-    "postcss.config.mjs",
     "package.json"
   ],
   "scripts": {
