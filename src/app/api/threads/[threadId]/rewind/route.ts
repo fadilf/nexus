@@ -1,79 +1,67 @@
-import { NextResponse } from "next/server";
 import { getProcessManager } from "@/lib/process-manager";
 import { getThread, truncateAfterMessage, truncateBeforeMessage } from "@/lib/thread-store";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import { restoreSnapshot, hasSnapshot } from "@/lib/snapshots";
+import { badRequest, conflict, notFound, routeWithWorkspaceJson } from "@/lib/api-route";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ threadId: string }> }
-) {
-  const { threadId } = await params;
-  const { messageId, keepMessage = true, revertCode = false } = (await request.json()) as {
-    messageId: string;
-    keepMessage?: boolean;
-    revertCode?: boolean;
-  };
+type RewindThreadBody = {
+  messageId?: string;
+  keepMessage?: boolean;
+  revertCode?: boolean;
+};
 
+export const POST = routeWithWorkspaceJson<{ threadId: string }, RewindThreadBody>(
+  async ({ params, workspaceDir, body }) => {
+    const { messageId, keepMessage = true, revertCode = false } = body;
   if (!messageId) {
-    return NextResponse.json({ error: "messageId required" }, { status: 400 });
+      throw badRequest("messageId required");
   }
 
-  const workspaceDir = await resolveWorkspaceDir(request);
   const pm = getProcessManager();
 
-  if (pm.isThreadStreaming(threadId)) {
-    return NextResponse.json(
-      { error: "Cannot rewind while agents are streaming" },
-      { status: 409 }
-    );
+    if (pm.isThreadStreaming(params.threadId)) {
+      throw conflict("Cannot rewind while agents are streaming");
   }
 
-  // Load thread to get agent IDs before truncating
-  const currentThread = await getThread(workspaceDir, threadId);
+    const currentThread = await getThread(workspaceDir, params.threadId);
   if (!currentThread) {
-    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+      throw notFound("Thread not found");
   }
 
-  pm.killByThread(threadId);
-  // Reset session IDs for ALL agents so CLI starts fresh sessions (not continuing old on-disk ones)
-  pm.resetSessions(threadId, currentThread.agents.map((a) => a.id));
+    pm.killByThread(params.threadId);
+    pm.resetSessions(params.threadId, currentThread.agents.map((a) => a.id));
 
-  // Optionally restore workspace files to the state before the target message
-  if (revertCode) {
-    const targetIndex = currentThread.messages.findIndex((m) => m.id === messageId);
-    let snapshotHash: string | undefined;
-    if (keepMessage) {
-      // Rewinding after messageId — find the next message's snapshot
-      const nextAssistant = currentThread.messages
-        .slice(targetIndex + 1)
-        .find((m) => m.role === "assistant" && m.snapshotTreeHash);
-      snapshotHash = nextAssistant?.snapshotTreeHash;
-    } else {
-      // Rewinding at messageId (re-send) — use this message's snapshot if it's an assistant msg,
-      // or find the next assistant message's snapshot
-      const msg = currentThread.messages[targetIndex];
-      if (msg?.role === "assistant" && msg.snapshotTreeHash) {
-        snapshotHash = msg.snapshotTreeHash;
-      } else {
+    if (revertCode) {
+      const targetIndex = currentThread.messages.findIndex((m) => m.id === messageId);
+      let snapshotHash: string | undefined;
+      if (keepMessage) {
         const nextAssistant = currentThread.messages
-          .slice(targetIndex)
+          .slice(targetIndex + 1)
           .find((m) => m.role === "assistant" && m.snapshotTreeHash);
         snapshotHash = nextAssistant?.snapshotTreeHash;
+      } else {
+        const msg = currentThread.messages[targetIndex];
+        if (msg?.role === "assistant" && msg.snapshotTreeHash) {
+          snapshotHash = msg.snapshotTreeHash;
+        } else {
+          const nextAssistant = currentThread.messages
+            .slice(targetIndex)
+            .find((m) => m.role === "assistant" && m.snapshotTreeHash);
+          snapshotHash = nextAssistant?.snapshotTreeHash;
+        }
+      }
+
+      if (snapshotHash && (await hasSnapshot(workspaceDir, snapshotHash))) {
+        await restoreSnapshot(workspaceDir, snapshotHash);
       }
     }
 
-    if (snapshotHash && (await hasSnapshot(workspaceDir, snapshotHash))) {
-      await restoreSnapshot(workspaceDir, snapshotHash);
-    }
-  }
-
-  const thread = keepMessage
-    ? await truncateAfterMessage(workspaceDir, threadId, messageId)
-    : await truncateBeforeMessage(workspaceDir, threadId, messageId);
+    const thread = keepMessage
+      ? await truncateAfterMessage(workspaceDir, params.threadId, messageId)
+      : await truncateBeforeMessage(workspaceDir, params.threadId, messageId);
   if (!thread) {
-    return NextResponse.json({ error: "Thread or message not found" }, { status: 404 });
+      throw notFound("Thread or message not found");
   }
 
-  return NextResponse.json(thread);
-}
+    return thread;
+  }
+);

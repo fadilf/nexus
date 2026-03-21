@@ -1,29 +1,25 @@
-import { NextResponse } from "next/server";
 import { getTerminalManager } from "@/lib/terminal-manager";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import crypto from "crypto";
+import { routeWithWorkspaceJson } from "@/lib/api-route";
 
-export async function POST(request: Request) {
-  let dir: string;
-  try {
-    dir = await resolveWorkspaceDir(request);
-  } catch {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 400 });
-  }
+type TerminalSpawnBody = {
+  sessionId?: string;
+};
 
-  const body = await request.json().catch(() => ({}));
-  const sessionId = body.sessionId || crypto.randomUUID();
-  const url = new URL(request.url);
-  const workspaceId = url.searchParams.get("workspaceId") || "";
+export const POST = routeWithWorkspaceJson<Record<string, never>, TerminalSpawnBody>(
+  async ({ body, url, workspaceDir }) => {
+    const sessionId = body.sessionId || crypto.randomUUID();
+    const workspaceId = url.searchParams.get("workspaceId") || "";
 
-  const tm = getTerminalManager();
+    const tm = getTerminalManager();
 
-  // Check if session already exists
-  const existing = tm.getSession(sessionId);
-  if (existing) {
-    return NextResponse.json({ sessionId, reattached: true });
-  }
+    const existing = tm.getSession(sessionId);
+    if (existing) {
+      return { sessionId, reattached: true };
+    }
 
-  tm.spawn(sessionId, workspaceId, dir);
-  return NextResponse.json({ sessionId });
-}
+    tm.spawn(sessionId, workspaceId, workspaceDir);
+    return { sessionId };
+  },
+  { optional: true }
+);

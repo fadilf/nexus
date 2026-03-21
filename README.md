@@ -1,6 +1,6 @@
 # Entourage
 
-A multi-agent coding tool with a unified chat UI. Entourage spawns CLI subprocesses (Claude CLI, Gemini CLI, Codex CLI, OpenCode) against a local project directory, letting you run real-time streaming conversations with multiple AI agents side by side.
+A multi-agent coding tool with a unified chat UI. Entourage spawns CLI subprocesses (Claude CLI, Gemini CLI, Codex CLI) against a local project directory, letting you run real-time streaming conversations with multiple AI agents side by side.
 
 Create custom agent profiles with distinct names, icons, colors, and personality system prompts. Use @mentions to route messages to specific agents within a thread.
 
@@ -10,7 +10,7 @@ Create custom agent profiles with distinct names, icons, colors, and personality
 
 ### Multi-agent chat with @mentions
 
-Talk to Claude, Gemini, Codex, OpenCode, or custom agents in the same thread. Use @mentions to route messages to specific agents.
+Talk to Claude, Gemini, Codex, or custom agents in the same thread. Use @mentions to route messages to specific agents.
 
 ![Agent @mention autocomplete](docs/screenshots/mentions.png)
 
@@ -55,7 +55,7 @@ Browse workspace files with syntax highlighting and image/PDF preview.
 
 ### Supported Agent CLIs
 
-Entourage ships with four built-in agent backends. Install any one of them to get started, or install multiple and use them side by side in the same workspace.
+Entourage ships with three built-in agent backends. Install any one of them to get started, or install multiple and use them side by side in the same workspace.
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) uses the `claude` command:
   `npm install -g @anthropic-ai/claude-code`
@@ -63,8 +63,6 @@ Entourage ships with four built-in agent backends. Install any one of them to ge
   `npm install -g @google/gemini-cli`
 - [Codex CLI](https://developers.openai.com/codex/cli) uses the `codex` command:
   `npm install -g @openai/codex`
-- [OpenCode](https://opencode.ai/docs/) uses the `opencode` command:
-  `npm install -g opencode-ai`
 
 After installing a CLI, run its command once to verify it is available on your `PATH` and complete authentication:
 
@@ -72,7 +70,6 @@ After installing a CLI, run its command once to verify it is available on your `
 claude
 gemini
 codex
-opencode auth login
 ```
 
 See each project's docs for alternative installers such as native binaries or Homebrew.

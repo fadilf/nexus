@@ -1,31 +1,19 @@
-import { NextResponse } from "next/server";
 import { updateAgent, deleteAgent } from "@/lib/agent-store";
+import { badRequest, getErrorMessage, route, routeWithJson } from "@/lib/api-route";
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ agentId: string }> }
-) {
-  const { agentId } = await params;
-  const updates = await request.json();
-
+export const PUT = routeWithJson<{ agentId: string }, Record<string, unknown>>(async ({ params, body }) => {
   try {
-    const agent = await updateAgent(agentId, updates);
-    return NextResponse.json(agent);
+    return await updateAgent(params.agentId, body);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    throw badRequest(getErrorMessage(err, "Failed to update agent"));
   }
-}
+});
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ agentId: string }> }
-) {
-  const { agentId } = await params;
-
+export const DELETE = route<{ agentId: string }>(async ({ params }) => {
   try {
-    await deleteAgent(agentId);
-    return NextResponse.json({ ok: true });
+    await deleteAgent(params.agentId);
+    return { ok: true };
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    throw badRequest(getErrorMessage(err, "Failed to delete agent"));
   }
-}
+});

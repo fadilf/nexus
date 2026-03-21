@@ -1,6 +1,6 @@
 "use client";
 
-import { Message, Agent } from "@/lib/types";
+import { Message, Agent, PermissionLevel } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import ChatMessage from "./ChatMessage";
 
@@ -23,6 +23,8 @@ export default function MessageGroup({
   isStreaming,
   displayName = "You",
   onContextMenu,
+  permissionLevel,
+  onChangePermissionLevel,
 }: {
   group: MessageGroupData;
   agent?: Agent;
@@ -30,6 +32,8 @@ export default function MessageGroup({
   isStreaming: boolean;
   displayName?: string;
   onContextMenu?: (message: Message, x: number, y: number) => void;
+  permissionLevel?: PermissionLevel;
+  onChangePermissionLevel?: (level: PermissionLevel) => void;
 }) {
   const firstMessage = group.messages[0];
 
@@ -83,6 +87,8 @@ export default function MessageGroup({
             message={firstMessage}
             isUser={isUser}
             onContextMenu={onContextMenu}
+            permissionLevel={permissionLevel}
+            onChangePermissionLevel={onChangePermissionLevel}
           />
         </div>
       </div>
@@ -97,6 +103,8 @@ export default function MessageGroup({
               message={message}
               isUser={isUser}
               onContextMenu={onContextMenu}
+              permissionLevel={permissionLevel}
+              onChangePermissionLevel={onChangePermissionLevel}
             />
           </div>
         </div>

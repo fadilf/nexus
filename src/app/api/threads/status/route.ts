@@ -1,13 +1,10 @@
-import { NextResponse } from "next/server";
 import { getProcessManager } from "@/lib/process-manager";
 import { listThreads } from "@/lib/thread-store";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
+import { routeWithWorkspace } from "@/lib/api-route";
 
-export async function GET(request: Request) {
+export const GET = routeWithWorkspace(async ({ workspaceDir }) => {
   const pm = getProcessManager();
   const statuses = pm.getAllStatuses();
-
-  const workspaceDir = await resolveWorkspaceDir(request);
   const threads = await listThreads(workspaceDir);
 
   const unreadByThread: Record<string, string[]> = {};
@@ -17,5 +14,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ statuses, unreadByThread });
-}
+  return { statuses, unreadByThread };
+});

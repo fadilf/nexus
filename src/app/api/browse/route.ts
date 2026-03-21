@@ -1,16 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { ApiRouteError, badRequest, route } from "@/lib/api-route";
 
-export async function GET(req: NextRequest) {
-  const requestedPath = req.nextUrl.searchParams.get("path") || os.homedir();
+export const GET = route(async ({ url }) => {
+  const requestedPath = url.searchParams.get("path") || os.homedir();
   const resolved = path.resolve(requestedPath);
 
   try {
     const stat = await fs.stat(resolved);
     if (!stat.isDirectory()) {
-      return NextResponse.json({ error: "Not a directory" }, { status: 400 });
+      throw badRequest("Not a directory");
     }
 
     const dirents = await fs.readdir(resolved, { withFileTypes: true });
@@ -25,8 +25,11 @@ export async function GET(req: NextRequest) {
         return a.name.localeCompare(b.name);
       });
 
-    return NextResponse.json({ path: resolved, entries });
-  } catch {
-    return NextResponse.json({ error: "Cannot read directory" }, { status: 400 });
+    return { path: resolved, entries };
+  } catch (error) {
+    if (error instanceof ApiRouteError) {
+      throw error;
+    }
+    throw badRequest("Cannot read directory");
   }
-}
+});

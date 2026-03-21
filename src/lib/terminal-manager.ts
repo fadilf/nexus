@@ -1,5 +1,10 @@
-import { spawn as ptySpawn, IPty } from "node-pty";
+import type { IPty } from "node-pty";
+import fs from "fs";
 import os from "os";
+
+// Use indirect require to prevent Turbopack from rewriting the module name
+// with a hash suffix, which breaks resolution in global npm installs
+const { spawn: ptySpawn } = eval('require')("node-pty") as typeof import("node-pty");
 
 type TerminalSession = {
   id: string;
@@ -20,11 +25,14 @@ class TerminalManager {
 
     const shell = process.env.SHELL || (os.platform() === "win32" ? "powershell.exe" : "bash");
 
+    // Fall back to home dir if cwd doesn't exist (e.g. deleted workspace)
+    const safeCwd = fs.existsSync(cwd) ? cwd : os.homedir();
+
     const pty = ptySpawn(shell, [], {
       name: "xterm-256color",
       cols: 80,
       rows: 24,
-      cwd,
+      cwd: safeCwd,
       env: { ...process.env } as Record<string, string>,
     });
 

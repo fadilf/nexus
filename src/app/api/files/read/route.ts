@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import fs from "fs/promises";
 import path from "path";
+import { ApiRouteError, badRequest, routeWithWorkspace, serverError } from "@/lib/api-route";
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 
@@ -22,56 +21,46 @@ function getLanguage(filePath: string): string {
   return LANGUAGE_MAP[ext] ?? "Plain Text";
 }
 
-export async function GET(request: Request) {
-  let dir: string;
-  try {
-    dir = await resolveWorkspaceDir(request);
-  } catch {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 400 });
-  }
-
-  const url = new URL(request.url);
+export const GET = routeWithWorkspace(async ({ url, workspaceDir }) => {
   const relativePath = url.searchParams.get("path") || "";
 
   if (!relativePath) {
-    return NextResponse.json({ error: "path parameter is required" }, { status: 400 });
+    throw badRequest("path parameter is required");
   }
 
-  // Path traversal protection
   if (relativePath.includes("..")) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+    throw badRequest("Invalid path");
   }
 
-  const resolved = path.resolve(dir, relativePath);
-  if (!resolved.startsWith(dir + path.sep) && resolved !== dir) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  const resolved = path.resolve(workspaceDir, relativePath);
+  if (!resolved.startsWith(workspaceDir + path.sep) && resolved !== workspaceDir) {
+    throw badRequest("Invalid path");
   }
 
   try {
     const stat = await fs.stat(resolved);
 
     if (stat.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: `File too large (${(stat.size / 1024 / 1024).toFixed(1)}MB). Maximum is 1MB.` },
-        { status: 400 }
-      );
+      throw badRequest(`File too large (${(stat.size / 1024 / 1024).toFixed(1)}MB). Maximum is 1MB.`);
     }
 
-    // Read first 8KB to check for binary content
     const fd = await fs.open(resolved, "r");
     const probe = Buffer.alloc(Math.min(8192, stat.size));
     await fd.read(probe, 0, probe.length, 0);
     await fd.close();
 
     if (probe.includes(0)) {
-      return NextResponse.json({ error: "Binary file — preview not available" }, { status: 400 });
+      throw badRequest("Binary file — preview not available");
     }
 
     const content = await fs.readFile(resolved, "utf-8");
     const language = getLanguage(relativePath);
 
-    return NextResponse.json({ content, language, size: stat.size });
-  } catch {
-    return NextResponse.json({ error: "Cannot read file" }, { status: 500 });
+    return { content, language, size: stat.size };
+  } catch (error) {
+    if (error instanceof ApiRouteError) {
+      throw error;
+    }
+    throw serverError("Cannot read file");
   }
-}
+});

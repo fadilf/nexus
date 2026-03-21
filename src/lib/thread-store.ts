@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 import { ENTOURAGE_DIR, THREADS_DIR } from "./config";
-import { Thread, Message, ThreadWithMessages, ThreadListItem, Agent } from "./types";
+import { Thread, Message, ThreadWithMessages, ThreadListItem, Agent, PermissionLevel, isAgentModel } from "./types";
 import { getProcessManager } from "./process-manager";
 
 function getThreadsDir(workspaceDir: string): string {
@@ -20,6 +20,28 @@ function withLock<T>(threadId: string, fn: () => Promise<T>): Promise<T> {
   const next = prev.then(fn, fn);
   locks.set(threadId, next.then(() => {}, () => {}));
   return next;
+}
+
+function sanitizeThreadAgents(thread: Thread): boolean {
+  const supportedAgents = thread.agents.filter((agent) =>
+    isAgentModel((agent as { model: unknown }).model)
+  );
+  let changed = supportedAgents.length !== thread.agents.length;
+
+  if (changed) {
+    thread.agents = supportedAgents;
+  }
+
+  if (thread.unreadAgents) {
+    const validAgentIds = new Set(thread.agents.map((agent) => agent.id));
+    const unreadAgents = thread.unreadAgents.filter((agentId) => validAgentIds.has(agentId));
+    if (unreadAgents.length !== thread.unreadAgents.length) {
+      thread.unreadAgents = unreadAgents;
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 export async function ensureEntourageDir(workspaceDir: string): Promise<void> {
@@ -42,6 +64,10 @@ export async function listThreads(workspaceDir: string): Promise<ThreadListItem[
     try {
       const raw = await readFile(path.join(dir, file), "utf-8");
       const data = JSON.parse(raw) as ThreadWithMessages;
+      const changed = sanitizeThreadAgents(data);
+      if (changed) {
+        await writeFile(path.join(dir, file), JSON.stringify(data, null, 2));
+      }
       const messages = data.messages ?? [];
       const lastMsg = messages[messages.length - 1];
       items.push({
@@ -66,8 +92,13 @@ export async function listThreads(workspaceDir: string): Promise<ThreadListItem[
 
 export async function getThread(workspaceDir: string, id: string): Promise<ThreadWithMessages | null> {
   try {
-    const raw = await readFile(getThreadPath(workspaceDir, id), "utf-8");
-    return JSON.parse(raw) as ThreadWithMessages;
+    const threadPath = getThreadPath(workspaceDir, id);
+    const raw = await readFile(threadPath, "utf-8");
+    const thread = JSON.parse(raw) as ThreadWithMessages;
+    if (sanitizeThreadAgents(thread)) {
+      await writeFile(threadPath, JSON.stringify(thread, null, 2));
+    }
+    return thread;
   } catch {
     return null;
   }
@@ -217,6 +248,17 @@ export async function archiveThread(workspaceDir: string, threadId: string, arch
     const thread = await getThread(workspaceDir, threadId);
     if (!thread) return null;
     thread.archived = archived;
+    thread.updatedAt = new Date().toISOString();
+    await writeFile(getThreadPath(workspaceDir, threadId), JSON.stringify(thread, null, 2));
+    return thread;
+  });
+}
+
+export async function updateThreadPermissionLevel(workspaceDir: string, threadId: string, permissionLevel: PermissionLevel): Promise<ThreadWithMessages | null> {
+  return withLock(threadId, async () => {
+    const thread = await getThread(workspaceDir, threadId);
+    if (!thread) return null;
+    thread.permissionLevel = permissionLevel;
     thread.updatedAt = new Date().toISOString();
     await writeFile(getThreadPath(workspaceDir, threadId), JSON.stringify(thread, null, 2));
     return thread;

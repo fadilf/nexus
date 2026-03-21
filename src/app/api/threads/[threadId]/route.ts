@@ -1,66 +1,70 @@
-import { NextResponse } from "next/server";
-import { getThread, deleteThread, updateThreadTitle, archiveThread, clearUnreadAgents } from "@/lib/thread-store";
+import { getThread, deleteThread, updateThreadTitle, archiveThread, clearUnreadAgents, updateThreadPermissionLevel } from "@/lib/thread-store";
 import { getProcessManager } from "@/lib/process-manager";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
+import { badRequest, notFound, routeWithWorkspace, routeWithWorkspaceJson } from "@/lib/api-route";
+import { PermissionLevel } from "@/lib/types";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ threadId: string }> }
-) {
-  const workspaceDir = await resolveWorkspaceDir(request);
-  const { threadId } = await params;
-  const thread = await getThread(workspaceDir, threadId);
+const VALID_PERMISSION_LEVELS: PermissionLevel[] = ["supervised", "auto-edit", "full"];
+
+type UpdateThreadBody = {
+  clearUnread?: boolean;
+  archived?: boolean;
+  title?: string;
+  permissionLevel?: PermissionLevel;
+};
+
+export const GET = routeWithWorkspace<{ threadId: string }>(async ({ params, workspaceDir }) => {
+  const thread = await getThread(workspaceDir, params.threadId);
   if (!thread) {
-    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+    throw notFound("Thread not found");
   }
-  return NextResponse.json(thread);
-}
+  return thread;
+});
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ threadId: string }> }
-) {
-  const workspaceDir = await resolveWorkspaceDir(request);
-  const { threadId } = await params;
-  const body = await request.json();
-
-  if (body.clearUnread === true) {
-    await clearUnreadAgents(workspaceDir, threadId);
-    return NextResponse.json({ success: true });
-  }
-
-  if (typeof body.archived === "boolean") {
-    const thread = await archiveThread(workspaceDir, threadId, body.archived);
-    if (!thread) {
-      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+export const PATCH = routeWithWorkspaceJson<{ threadId: string }, UpdateThreadBody>(
+  async ({ params, workspaceDir, body }) => {
+    if (body.clearUnread === true) {
+      await clearUnreadAgents(workspaceDir, params.threadId);
+      return { success: true };
     }
-    return NextResponse.json(thread);
-  }
 
-  if (!body.title || typeof body.title !== "string") {
-    return NextResponse.json({ error: "Title is required" }, { status: 400 });
-  }
-  const thread = await updateThreadTitle(workspaceDir, threadId, body.title.trim());
-  if (!thread) {
-    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
-  }
-  return NextResponse.json(thread);
-}
+    if (typeof body.archived === "boolean") {
+      const thread = await archiveThread(workspaceDir, params.threadId, body.archived);
+      if (!thread) {
+        throw notFound("Thread not found");
+      }
+      return thread;
+    }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ threadId: string }> }
-) {
-  const workspaceDir = await resolveWorkspaceDir(request);
-  const { threadId } = await params;
+    if (body.permissionLevel) {
+      if (!VALID_PERMISSION_LEVELS.includes(body.permissionLevel)) {
+        throw badRequest("Invalid permission level");
+      }
+      const thread = await updateThreadPermissionLevel(workspaceDir, params.threadId, body.permissionLevel);
+      if (!thread) {
+        throw notFound("Thread not found");
+      }
+      return thread;
+    }
+
+    if (!body.title || typeof body.title !== "string") {
+      throw badRequest("Title is required");
+    }
+    const thread = await updateThreadTitle(workspaceDir, params.threadId, body.title.trim());
+    if (!thread) {
+      throw notFound("Thread not found");
+    }
+    return thread;
+  }
+);
+
+export const DELETE = routeWithWorkspace<{ threadId: string }>(async ({ params, workspaceDir }) => {
   const pm = getProcessManager();
-  // Kill any running processes for this thread
-  const thread = await getThread(workspaceDir, threadId);
+  const thread = await getThread(workspaceDir, params.threadId);
   if (thread) {
     for (const agent of thread.agents) {
-      pm.kill(threadId, agent.id);
+      pm.kill(params.threadId, agent.id);
     }
   }
-  await deleteThread(workspaceDir, threadId);
-  return NextResponse.json({ ok: true });
-}
+  await deleteThread(workspaceDir, params.threadId);
+  return { ok: true };
+});

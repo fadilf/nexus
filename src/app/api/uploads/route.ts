@@ -1,10 +1,9 @@
-import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { getUploadsDir } from "@/lib/config";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import { MessageImage } from "@/lib/types";
+import { badRequest, routeWithWorkspace } from "@/lib/api-route";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -19,13 +18,12 @@ function extFromMime(mime: string): string {
   return map[mime] ?? "png";
 }
 
-export async function POST(request: Request) {
-  const workspaceDir = await resolveWorkspaceDir(request);
+export const POST = routeWithWorkspace(async ({ request, workspaceDir }) => {
   const formData = await request.formData();
   const files = formData.getAll("files") as File[];
 
   if (files.length === 0) {
-    return NextResponse.json({ error: "No files provided" }, { status: 400 });
+    throw badRequest("No files provided");
   }
 
   const uploadsDir = getUploadsDir(workspaceDir);
@@ -35,16 +33,10 @@ export async function POST(request: Request) {
 
   for (const file of files) {
     if (!ALLOWED_TYPES.has(file.type)) {
-      return NextResponse.json(
-        { error: `Invalid file type: ${file.type}. Allowed: png, jpg, gif, webp` },
-        { status: 400 }
-      );
+      throw badRequest(`Invalid file type: ${file.type}. Allowed: png, jpg, gif, webp`);
     }
     if (file.size > MAX_SIZE) {
-      return NextResponse.json(
-        { error: `File too large: ${file.name}. Max 10MB` },
-        { status: 400 }
-      );
+      throw badRequest(`File too large: ${file.name}. Max 10MB`);
     }
 
     const id = crypto.randomUUID();
@@ -57,5 +49,5 @@ export async function POST(request: Request) {
     images.push({ id, filename, ext });
   }
 
-  return NextResponse.json(images);
-}
+  return images;
+});

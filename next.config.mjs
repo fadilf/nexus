@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ["node-pty"],
+
   output: "standalone",
+  compress: false,
 };
 
 export default nextConfig;

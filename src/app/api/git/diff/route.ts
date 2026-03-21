@@ -1,26 +1,17 @@
-import { NextResponse } from "next/server";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import simpleGit from "simple-git";
 import { readFile } from "fs/promises";
 import path from "path";
+import { badRequest, getErrorMessage, routeWithWorkspace, serverError } from "@/lib/api-route";
 
-export async function GET(request: Request) {
-  let dir: string;
-  try {
-    dir = await resolveWorkspaceDir(request);
-  } catch {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 400 });
-  }
-
-  const url = new URL(request.url);
+export const GET = routeWithWorkspace(async ({ url, workspaceDir }) => {
   const file = url.searchParams.get("file");
   const staged = url.searchParams.get("staged") === "true";
 
   if (!file) {
-    return NextResponse.json({ error: "file parameter required" }, { status: 400 });
+    throw badRequest("file parameter required");
   }
 
-  const git = simpleGit(dir);
+  const git = simpleGit(workspaceDir);
 
   try {
     let diff: string;
@@ -32,7 +23,7 @@ export async function GET(request: Request) {
 
       if (!diff) {
         try {
-          const content = await readFile(path.join(dir, file), "utf-8");
+          const content = await readFile(path.join(workspaceDir, file), "utf-8");
           const lines = content.split("\n");
           diff = `--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n` +
             lines.map((l) => `+${l}`).join("\n");
@@ -42,9 +33,8 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ diff });
+    return { diff };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Git error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    throw serverError(getErrorMessage(err, "Git error"));
   }
-}
+});

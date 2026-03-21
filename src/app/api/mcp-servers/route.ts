@@ -1,32 +1,39 @@
-import { NextResponse } from "next/server";
 import { loadMcpServers, addMcpServer } from "@/lib/mcp-store";
 import { getMcpClientManager } from "@/lib/mcp-client-manager";
+import { badRequest, getErrorMessage, route, routeWithJson } from "@/lib/api-route";
 
-export async function GET() {
+type McpServerBody = {
+  name?: string;
+  transport?: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+};
+
+export const GET = route(async () => {
   const servers = await loadMcpServers();
   const manager = getMcpClientManager();
   const statuses = manager.getConnectionStatus();
   const statusMap = new Map(statuses.map((s) => [s.serverId, s]));
-  return NextResponse.json(
-    servers.map((s) => ({
-      ...s,
-      connected: statusMap.has(s.id),
-      appToolCount: statusMap.get(s.id)?.toolCount ?? 0,
-    }))
-  );
-}
+  return servers.map((s) => ({
+    ...s,
+    connected: statusMap.has(s.id),
+    appToolCount: statusMap.get(s.id)?.toolCount ?? 0,
+  }));
+});
 
-export async function POST(request: Request) {
-  const { name, transport, command, args, env, url } = await request.json();
+export const POST = routeWithJson<Record<string, never>, McpServerBody>(async ({ body }) => {
+  const { name, transport, command, args, env, url } = body;
   if (!name) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
+    throw badRequest("name is required");
   }
   const isSSE = transport === "sse";
   if (isSSE && !url) {
-    return NextResponse.json({ error: "url is required for remote servers" }, { status: 400 });
+    throw badRequest("url is required for remote servers");
   }
   if (!isSSE && !command) {
-    return NextResponse.json({ error: "command is required for local servers" }, { status: 400 });
+    throw badRequest("command is required for local servers");
   }
 
   const server = await addMcpServer({
@@ -40,11 +47,11 @@ export async function POST(request: Request) {
   try {
     await manager.connect(server);
   } catch (err) {
-    return NextResponse.json({
+    return {
       ...server,
       connected: false,
-      error: (err as Error).message,
-    });
+      error: getErrorMessage(err, "Failed to connect to MCP server"),
+    };
   }
-  return NextResponse.json({ ...server, connected: true });
-}
+  return { ...server, connected: true };
+});

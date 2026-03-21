@@ -1,23 +1,15 @@
-import { NextResponse } from "next/server";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import simpleGit from "simple-git";
 import { GitFileEntry, GitStatus } from "@/lib/types";
 import { mapGitStatus } from "@/lib/plugins";
+import { getErrorMessage, routeWithWorkspace, serverError } from "@/lib/api-route";
 
-export async function GET(request: Request) {
-  let dir: string;
-  try {
-    dir = await resolveWorkspaceDir(request);
-  } catch {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 400 });
-  }
-
-  const git = simpleGit(dir);
+export const GET = routeWithWorkspace(async ({ workspaceDir }) => {
+  const git = simpleGit(workspaceDir);
 
   try {
     const isRepo = await git.checkIsRepo();
     if (!isRepo) {
-      return NextResponse.json({ isRepo: false, branch: "", staged: [], unstaged: [], ahead: 0, behind: 0 } satisfies GitStatus);
+      return { isRepo: false, branch: "", staged: [], unstaged: [], ahead: 0, behind: 0 } satisfies GitStatus;
     }
 
     const status = await git.status();
@@ -40,16 +32,15 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    return {
       isRepo: true,
       branch: status.current ?? "",
       staged,
       unstaged,
       ahead: status.ahead,
       behind: status.behind,
-    } satisfies GitStatus);
+    } satisfies GitStatus;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Git error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    throw serverError(getErrorMessage(err, "Git error"));
   }
-}
+});

@@ -1,5 +1,5 @@
 import path from "path";
-import { Agent } from "./types";
+import { Agent, AgentModel, PermissionLevel } from "./types";
 
 export const ENTOURAGE_DIR = ".entourage";
 export const THREADS_DIR = "threads";
@@ -9,7 +9,7 @@ export function getUploadsDir(workspaceDir?: string): string {
   return path.join(workspaceDir || process.cwd(), ENTOURAGE_DIR, UPLOADS_DIR);
 }
 
-export const DEFAULT_AGENT_IDS = ["claude", "gemini", "codex", "opencode"];
+export const DEFAULT_AGENT_IDS = ["claude", "gemini", "codex"];
 
 export const DEFAULT_AGENTS: Agent[] = [
   {
@@ -33,16 +33,9 @@ export const DEFAULT_AGENTS: Agent[] = [
     avatarColor: "#10a37f",
     isDefault: true,
   },
-  {
-    id: "opencode",
-    name: "OpenCode",
-    model: "opencode",
-    avatarColor: "#6366f1",
-    isDefault: true,
-  },
 ];
 
-export function getCliCommand(model: string, prompt: string, sessionId: string, isResume: boolean, personality?: string, imagePaths?: string[]): { cmd: string; args: string[] } {
+export function getCliCommand(model: AgentModel, prompt: string, sessionId: string, isResume: boolean, personality?: string, imagePaths?: string[], permissionLevel: PermissionLevel = "full", threadPaths?: string[]): { cmd: string; args: string[] } {
   const hasImages = imagePaths && imagePaths.length > 0;
 
   // Build prompt with image instructions
@@ -52,12 +45,33 @@ export function getCliCommand(model: string, prompt: string, sessionId: string, 
     fullPrompt = `IMPORTANT: The user has attached image(s) to this message. You MUST use the Read tool to view each image file BEFORE responding. Image paths:\n${imageList}\n\nUser message: ${prompt}`;
   }
 
+  const hasThreads = threadPaths && threadPaths.length > 0;
+
+  // Add thread reference instructions
+  if (hasThreads) {
+    const threadList = threadPaths.map((p) => `- ${p}`).join("\n");
+    const threadInstruction = `IMPORTANT: The user has attached reference conversation thread(s) for additional context.\nYou may read these JSON files to understand prior conversations, but you MUST NOT modify, delete, or write to them.\nReference thread files:\n${threadList}`;
+    if (hasImages) {
+      // Insert thread instruction before "User message:"
+      fullPrompt = fullPrompt.replace(
+        `\n\nUser message: ${prompt}`,
+        `\n\n${threadInstruction}\n\nUser message: ${prompt}`
+      );
+    } else {
+      fullPrompt = `${threadInstruction}\n\nUser message: ${prompt}`;
+    }
+  }
+
   if (model === "claude") {
     const args = ["-p", fullPrompt, "--output-format", "stream-json", "--verbose"];
-    // --dangerously-skip-permissions cannot be used as root
     const isRoot = process.getuid?.() === 0;
     if (!isRoot) {
-      args.push("--dangerously-skip-permissions");
+      if (permissionLevel === "full") {
+        args.push("--dangerously-skip-permissions");
+      } else if (permissionLevel === "auto-edit") {
+        args.push("--permission-mode", "acceptEdits");
+      }
+      // "supervised" — no flag, uses CLI default permission mode
     }
     if (isResume) {
       args.push("--resume", sessionId);
@@ -78,9 +92,22 @@ export function getCliCommand(model: string, prompt: string, sessionId: string, 
 
     const args: string[] = [];
     if (isResume) {
-      args.push("exec", "resume", "--json", "--dangerously-bypass-approvals-and-sandbox", sessionId);
+      args.push("exec", "resume", "--json");
+      if (permissionLevel === "full") {
+        args.push("--dangerously-bypass-approvals-and-sandbox");
+      } else if (permissionLevel === "auto-edit") {
+        args.push("-s", "workspace-write");
+      }
+      // "supervised" — no sandbox flag, uses read-only sandbox
+      args.push(sessionId);
     } else {
-      args.push("exec", "--json", "--dangerously-bypass-approvals-and-sandbox");
+      args.push("exec", "--json");
+      if (permissionLevel === "full") {
+        args.push("--dangerously-bypass-approvals-and-sandbox");
+      } else if (permissionLevel === "auto-edit") {
+        args.push("-s", "workspace-write");
+      }
+      // "supervised" — no sandbox flag, uses read-only sandbox
     }
     if (hasImages) {
       for (const p of imagePaths) {
@@ -94,32 +121,19 @@ export function getCliCommand(model: string, prompt: string, sessionId: string, 
     return { cmd: "codex", args };
   }
 
-  if (model === "opencode") {
-    let effectivePrompt = fullPrompt;
-    if (personality) {
-      effectivePrompt = `[System Instructions]\n${personality}\n[End System Instructions]\n\n${effectivePrompt}`;
-    }
-    const args = ["run", "--format", "json"];
-    if (isResume) {
-      args.push("--session", sessionId);
-    }
-    if (hasImages) {
-      for (const p of imagePaths) {
-        args.push("-f", p);
-      }
-    }
-    args.push(effectivePrompt);
-    return { cmd: "opencode", args };
-  }
-
   // Gemini: no --system-instruction flag, prepend to prompt
   let effectivePrompt = fullPrompt;
   if (personality) {
     effectivePrompt = `[System Instructions]\n${personality}\n[End System Instructions]\n\n${fullPrompt}`;
   }
 
-  return {
-    cmd: "gemini",
-    args: ["-p", effectivePrompt, "--output-format", "stream-json", "--yolo"],
-  };
+  const geminiArgs = ["-p", effectivePrompt, "--output-format", "stream-json"];
+  if (permissionLevel === "full") {
+    geminiArgs.push("--yolo");
+  } else if (permissionLevel === "auto-edit") {
+    geminiArgs.push("--approval-mode", "auto_edit");
+  }
+  // "supervised" — no flag, uses CLI default (dangerous tools excluded)
+
+  return { cmd: "gemini", args: geminiArgs };
 }

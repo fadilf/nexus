@@ -1,19 +1,18 @@
-import { NextResponse } from "next/server";
 import { getProcessManager } from "@/lib/process-manager";
+import { badRequest, routeWithJson } from "@/lib/api-route";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ threadId: string }> }
-) {
-  const { threadId } = await params;
-  const { agentId } = (await request.json()) as { agentId: string };
+type StopThreadBody = {
+  agentId?: string;
+};
 
+export const POST = routeWithJson<{ threadId: string }, StopThreadBody>(async ({ params, body }) => {
+  const { agentId } = body;
   if (!agentId) {
-    return NextResponse.json({ error: "agentId required" }, { status: 400 });
+    throw badRequest("agentId required");
   }
 
   const pm = getProcessManager();
-  pm.kill(threadId, agentId);
+  pm.kill(params.threadId, agentId);
 
-  return NextResponse.json(pm.getStatus(threadId, agentId));
-}
+  return pm.getStatus(params.threadId, agentId);
+});

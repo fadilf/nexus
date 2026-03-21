@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Paperclip, X, Mic, Square } from "lucide-react";
+import { Plus, Image as ImageIcon, MessageSquare, ChevronLeft, Check, X, Mic, Square } from "lucide-react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { Agent, MessageImage } from "@/lib/types";
+import { Agent, MessageImage, ThreadListItem } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import { useWorkspaceId, useWsParam } from "@/contexts/WorkspaceContext";
 
@@ -103,6 +104,34 @@ async function writeImageDraft(storageKey: string, images: PendingImage[]): Prom
   }
 }
 
+function getThreadDraftStorageKey(workspaceId: string | null, threadId: string): string {
+  return `entourage-thread-draft:${workspaceId ?? "default"}:${threadId}`;
+}
+
+function readThreadDraft(storageKey: string): { id: string; title: string }[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function writeThreadDraft(storageKey: string, threads: { id: string; title: string }[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (threads.length === 0) {
+      localStorage.removeItem(storageKey);
+    } else {
+      localStorage.setItem(storageKey, JSON.stringify(threads));
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
 export default function MessageInput({
   threadId,
   agents,
@@ -114,17 +143,19 @@ export default function MessageInput({
   onDraftChange,
   showTopBorder = true,
   compactTopPadding = false,
+  workspaceThreads,
 }: {
   threadId: string;
   agents: Agent[];
   allAgents?: Agent[];
-  onSendMessage: (content: string, images?: MessageImage[]) => void;
+  onSendMessage: (content: string, images?: MessageImage[], attachedThreadIds?: string[]) => void;
   onStop?: (agentId: string) => void;
   disabled?: boolean;
   isMobile?: boolean;
   onDraftChange?: (hasText: boolean) => void;
   showTopBorder?: boolean;
   compactTopPadding?: boolean;
+  workspaceThreads?: ThreadListItem[];
 }) {
   const workspaceId = useWorkspaceId();
   const wsParam = useWsParam();
@@ -138,6 +169,18 @@ export default function MessageInput({
   const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const threadDraftStorageKey = getThreadDraftStorageKey(workspaceId, threadId);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showThreadPicker, setShowThreadPicker] = useState(false);
+  const [threadSearchQuery, setThreadSearchQuery] = useState("");
+  const [pendingThreads, setPendingThreads] = useState<{ id: string; title: string }[]>(
+    () => readThreadDraft(getThreadDraftStorageKey(workspaceId, threadId))
+  );
+  const plusButtonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const MAX_ATTACHED_THREADS = 5;
 
   const updateDraft = useCallback(
     (value: string) => {
@@ -177,6 +220,22 @@ export default function MessageInput({
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
   }, [content]);
 
+  useEffect(() => {
+    if (!showPlusMenu && !showThreadPicker) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
+        plusButtonRef.current && !plusButtonRef.current.contains(e.target as Node)
+      ) {
+        setShowPlusMenu(false);
+        setShowThreadPicker(false);
+        setThreadSearchQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showPlusMenu, showThreadPicker]);
+
   const addFiles = useCallback((files: FileList | File[]) => {
     const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (imageFiles.length === 0) return;
@@ -212,6 +271,27 @@ export default function MessageInput({
     return res.json();
   }, [wsParam]);
 
+  const toggleThread = useCallback((thread: { id: string; title: string }) => {
+    setPendingThreads((prev) => {
+      const exists = prev.some((t) => t.id === thread.id);
+      const next = exists
+        ? prev.filter((t) => t.id !== thread.id)
+        : prev.length >= MAX_ATTACHED_THREADS
+          ? prev
+          : [...prev, { id: thread.id, title: thread.title }];
+      writeThreadDraft(threadDraftStorageKey, next);
+      return next;
+    });
+  }, [threadDraftStorageKey]);
+
+  const removeThread = useCallback((threadId: string) => {
+    setPendingThreads((prev) => {
+      const next = prev.filter((t) => t.id !== threadId);
+      writeThreadDraft(threadDraftStorageKey, next);
+      return next;
+    });
+  }, [threadDraftStorageKey]);
+
   const handleSend = useCallback(async () => {
     if (!canSend) return;
 
@@ -225,17 +305,26 @@ export default function MessageInput({
         setUploading(false);
         return;
       }
-      // Clean up previews
       pendingImages.forEach((img) => URL.revokeObjectURL(img.preview));
       setPendingImages([]);
       writeImageDraft(imageDraftStorageKey, []);
       setUploading(false);
     }
 
-    onSendMessage(content.trim(), images);
+    const attachedThreadIds = pendingThreads.length > 0
+      ? pendingThreads.map((t) => t.id)
+      : undefined;
+
+    onSendMessage(content.trim(), images, attachedThreadIds);
     updateDraft("");
     setShowMentions(false);
-  }, [canSend, content, pendingImages, onSendMessage, uploadImages, updateDraft, imageDraftStorageKey]);
+
+    // Clear pending threads
+    if (pendingThreads.length > 0) {
+      setPendingThreads([]);
+      writeThreadDraft(threadDraftStorageKey, []);
+    }
+  }, [canSend, content, pendingImages, pendingThreads, onSendMessage, uploadImages, updateDraft, imageDraftStorageKey, threadDraftStorageKey]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -376,9 +465,12 @@ export default function MessageInput({
         <div className="mb-2 flex flex-wrap gap-2">
           {pendingImages.map((img, i) => (
             <div key={i} className="group relative">
-              <img
+              <Image
                 src={img.preview}
                 alt={img.file.name}
+                width={64}
+                height={64}
+                unoptimized
                 className="h-16 w-16 rounded-lg border border-zinc-200 dark:border-zinc-700 object-cover"
               />
               <button
@@ -388,6 +480,26 @@ export default function MessageInput({
                 <X className="h-3 w-3" />
               </button>
             </div>
+          ))}
+        </div>
+      )}
+
+      {pendingThreads.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {pendingThreads.map((t) => (
+            <span
+              key={t.id}
+              className="inline-flex items-center gap-1 rounded-md bg-violet-100 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-400"
+            >
+              <MessageSquare className="h-3 w-3" />
+              <span className="max-w-[120px] truncate">{t.title}</span>
+              <button
+                onClick={() => removeThread(t.id)}
+                className="ml-0.5 rounded-full p-0.5 hover:bg-violet-200 dark:hover:bg-violet-800"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
           ))}
         </div>
       )}
@@ -404,14 +516,144 @@ export default function MessageInput({
             e.target.value = "";
           }}
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled}
-          className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 disabled:opacity-50"
-          title="Attach images"
-        >
-          <Paperclip className="h-5 w-5" />
-        </button>
+        <div className="relative">
+          <button
+            ref={plusButtonRef}
+            onClick={() => {
+              if (showThreadPicker) {
+                setShowThreadPicker(false);
+                setShowPlusMenu(false);
+                setThreadSearchQuery("");
+              } else {
+                setShowPlusMenu((v) => !v);
+              }
+            }}
+            disabled={disabled}
+            className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 disabled:opacity-50"
+            title="Attach"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+
+          {(showPlusMenu || showThreadPicker) && (
+            <div
+              ref={popoverRef}
+              className="absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden z-50"
+            >
+              {showThreadPicker ? (
+                <>
+                  <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 px-3 py-2">
+                    <button
+                      onClick={() => {
+                        setShowThreadPicker(false);
+                        setShowPlusMenu(true);
+                        setThreadSearchQuery("");
+                      }}
+                      className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Attach threads</span>
+                  </div>
+                  <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-700">
+                    <input
+                      type="text"
+                      placeholder="Search threads..."
+                      value={threadSearchQuery}
+                      onChange={(e) => setThreadSearchQuery(e.target.value)}
+                      className="w-full rounded-md border border-zinc-200 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-700 px-2 py-1 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-violet-500"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {(workspaceThreads ?? [])
+                      .filter((t) => t.id !== threadId)
+                      .filter((t) => !t.archived)
+                      .filter((t) => !threadSearchQuery || t.title.toLowerCase().includes(threadSearchQuery.toLowerCase()))
+                      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                      .map((t) => {
+                        const isSelected = pendingThreads.some((pt) => pt.id === t.id);
+                        const isDisabled = !isSelected && pendingThreads.length >= MAX_ATTACHED_THREADS;
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => !isDisabled && toggleThread({ id: t.id, title: t.title })}
+                            disabled={isDisabled}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                              isDisabled
+                                ? "opacity-40 cursor-not-allowed"
+                                : "hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                            } ${isSelected ? "bg-violet-50 dark:bg-violet-900/20" : ""}`}
+                          >
+                            <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                              isSelected
+                                ? "border-violet-500 bg-violet-500 text-white"
+                                : "border-zinc-300 dark:border-zinc-600"
+                            }`}>
+                              {isSelected && <Check className="h-3 w-3" />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate text-zinc-700 dark:text-zinc-300">{t.title}</span>
+                                <div className="flex -space-x-1 shrink-0">
+                                  {t.agents.slice(0, 3).map((a) => (
+                                    <div
+                                      key={a.id}
+                                      className="h-3.5 w-3.5 rounded-full border border-white dark:border-zinc-800"
+                                      style={{ backgroundColor: a.avatarColor }}
+                                      title={a.name}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                                {new Date(t.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                  <div className="border-t border-zinc-200 dark:border-zinc-700 px-3 py-2">
+                    <button
+                      onClick={() => {
+                        setShowThreadPicker(false);
+                        setShowPlusMenu(false);
+                        setThreadSearchQuery("");
+                      }}
+                      className="w-full rounded-md bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      fileInputRef.current?.click();
+                      setShowPlusMenu(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    Attach images
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowPlusMenu(false);
+                      setShowThreadPicker(true);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Attach thread
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="relative flex-1 flex items-end">
           <textarea

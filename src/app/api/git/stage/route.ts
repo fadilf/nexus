@@ -1,24 +1,20 @@
-import { NextResponse } from "next/server";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import simpleGit from "simple-git";
 import { GitFileEntry, GitStatus } from "@/lib/types";
 import { mapGitStatus } from "@/lib/plugins";
+import { badRequest, getErrorMessage, routeWithWorkspaceJson, serverError } from "@/lib/api-route";
 
-export async function POST(request: Request) {
-  let dir: string;
-  try {
-    dir = await resolveWorkspaceDir(request);
-  } catch {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 400 });
+type GitStageBody = {
+  files?: string[];
+  action?: string;
+};
+
+export const POST = routeWithWorkspaceJson<Record<string, never>, GitStageBody>(async ({ body, workspaceDir }) => {
+  const { files, action } = body;
+  if (!Array.isArray(files) || (action !== "stage" && action !== "unstage")) {
+    throw badRequest("Invalid request");
   }
 
-  const { files, action } = await request.json();
-
-  if (!Array.isArray(files) || !["stage", "unstage"].includes(action)) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
-
-  const git = simpleGit(dir);
+  const git = simpleGit(workspaceDir);
 
   try {
     if (action === "stage") {
@@ -40,16 +36,15 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    return {
       isRepo: true,
       branch: status.current ?? "",
       staged,
       unstaged,
       ahead: 0,
       behind: 0,
-    } satisfies GitStatus);
+    } satisfies GitStatus;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Git error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    throw serverError(getErrorMessage(err, "Git error"));
   }
-}
+});

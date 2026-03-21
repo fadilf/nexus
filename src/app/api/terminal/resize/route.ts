@@ -1,20 +1,24 @@
-import { NextResponse } from "next/server";
 import { getTerminalManager } from "@/lib/terminal-manager";
+import { badRequest, notFound, routeWithJson } from "@/lib/api-route";
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
+type TerminalResizeBody = {
+  sessionId?: string;
+  cols?: number;
+  rows?: number;
+};
+
+export const POST = routeWithJson<Record<string, never>, TerminalResizeBody>(async ({ body }) => {
   const { sessionId, cols, rows } = body;
-
   if (!sessionId || typeof cols !== "number" || typeof rows !== "number") {
-    return NextResponse.json({ error: "sessionId, cols, and rows are required" }, { status: 400 });
+    throw badRequest("sessionId, cols, and rows are required");
   }
 
   const tm = getTerminalManager();
   const ok = tm.resize(sessionId, cols, rows);
 
   if (!ok) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    throw notFound("Session not found");
   }
 
-  return NextResponse.json({ ok: true });
-}
+  return { ok: true };
+}, { optional: true });

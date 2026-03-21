@@ -3,10 +3,11 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import { DEFAULT_AGENTS, DEFAULT_AGENT_IDS } from "./config";
-import { Agent } from "./types";
+import { Agent, isAgentModel } from "./types";
 
 type QuickRepliesConfig = { enabled: boolean };
-type Config = { agents: Agent[]; displayName?: string; plugins?: Record<string, boolean>; quickReplies?: QuickRepliesConfig };
+type ToolCallGroupingConfig = { enabled: boolean };
+type Config = { agents: Agent[]; displayName?: string; plugins?: Record<string, boolean>; quickReplies?: QuickRepliesConfig; toolCallGrouping?: ToolCallGroupingConfig };
 
 const GLOBAL_CONFIG_DIR = path.join(os.homedir(), ".entourage");
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CONFIG_DIR, "config.json");
@@ -22,6 +23,10 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 let migrated = false;
+
+function hasSupportedModel(agent: Agent): boolean {
+  return isAgentModel((agent as { model: unknown }).model);
+}
 
 async function migrateIfNeeded(): Promise<void> {
   if (migrated) return;
@@ -57,13 +62,22 @@ async function loadConfig(): Promise<Config> {
   await migrateIfNeeded();
   try {
     const raw = await readFile(GLOBAL_CONFIG_PATH, "utf-8");
-    const config = JSON.parse(raw) as Config;
+    const parsed = JSON.parse(raw) as Partial<Config>;
+    const config: Config = {
+      ...parsed,
+      agents: Array.isArray(parsed.agents) ? parsed.agents.filter(hasSupportedModel) : [],
+    };
+    let changed = !Array.isArray(parsed.agents) || config.agents.length !== parsed.agents.length;
 
     // Merge in any new default agents that were added since config was created
     const existingIds = new Set(config.agents.map((a) => a.id));
     const missing = DEFAULT_AGENTS.filter((a) => !existingIds.has(a.id));
     if (missing.length > 0) {
       config.agents.push(...missing.map((a) => ({ ...a, isDefault: true })));
+      changed = true;
+    }
+
+    if (changed) {
       await saveConfig(config);
     }
 
@@ -78,8 +92,12 @@ async function loadConfig(): Promise<Config> {
 
 async function saveConfig(config: Config): Promise<void> {
   return withLock(async () => {
+    const sanitized: Config = {
+      ...config,
+      agents: config.agents.filter(hasSupportedModel),
+    };
     await mkdir(GLOBAL_CONFIG_DIR, { recursive: true });
-    await writeFile(GLOBAL_CONFIG_PATH, JSON.stringify(config, null, 2));
+    await writeFile(GLOBAL_CONFIG_PATH, JSON.stringify(sanitized, null, 2));
   });
 }
 
@@ -132,6 +150,17 @@ export async function saveQuickReplies(quickReplies: Partial<QuickRepliesConfig>
   await saveConfig({ ...config, quickReplies: { ...current, ...quickReplies } });
 }
 
+export async function loadToolCallGrouping(): Promise<ToolCallGroupingConfig> {
+  const config = await loadConfig();
+  return config.toolCallGrouping ?? { enabled: false };
+}
+
+export async function saveToolCallGrouping(toolCallGrouping: Partial<ToolCallGroupingConfig>): Promise<void> {
+  const config = await loadConfig();
+  const current = config.toolCallGrouping ?? { enabled: true };
+  await saveConfig({ ...config, toolCallGrouping: { ...current, ...toolCallGrouping } });
+}
+
 function validateAgentName(name: string): void {
   if (!/^[a-zA-Z0-9]+$/.test(name)) {
     throw new Error("Agent name must contain only letters and numbers (no spaces or special characters)");
@@ -146,6 +175,9 @@ export async function createAgent(data: {
   personality?: string;
 }): Promise<Agent> {
   validateAgentName(data.name);
+  if (!isAgentModel(data.model)) {
+    throw new Error("Unsupported model");
+  }
   const agents = await loadAgents();
 
   if (agents.some((a) => a.name.toLowerCase() === data.name.toLowerCase())) {
@@ -171,6 +203,10 @@ export async function updateAgent(id: string, updates: Partial<Omit<Agent, "id" 
   const agents = await loadAgents();
   const idx = agents.findIndex((a) => a.id === id);
   if (idx === -1) throw new Error("Agent not found");
+
+  if (updates.model !== undefined && !isAgentModel(updates.model)) {
+    throw new Error("Unsupported model");
+  }
 
   if (updates.name) {
     validateAgentName(updates.name);

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Settings, Plus, GitBranch, FolderOpen, X } from "lucide-react";
-import { Workspace, Icon } from "@/lib/types";
+import { Workspace } from "@/lib/types";
 import { renderIcon } from "./IconPicker";
 
 type Props = {

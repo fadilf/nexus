@@ -1,17 +1,19 @@
-import { NextResponse } from "next/server";
 import { reorderAgents } from "@/lib/agent-store";
+import { badRequest, getErrorMessage, routeWithJson } from "@/lib/api-route";
 
-export async function PUT(request: Request) {
-  const { orderedIds } = (await request.json()) as { orderedIds: string[] };
+type ReorderAgentsBody = {
+  orderedIds?: string[];
+};
 
+export const PUT = routeWithJson<Record<string, never>, ReorderAgentsBody>(async ({ body }) => {
+  const { orderedIds } = body;
   if (!Array.isArray(orderedIds)) {
-    return NextResponse.json({ error: "orderedIds must be an array" }, { status: 400 });
+    throw badRequest("orderedIds must be an array");
   }
 
   try {
-    const agents = await reorderAgents(orderedIds);
-    return NextResponse.json(agents);
+    return await reorderAgents(orderedIds);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    throw badRequest(getErrorMessage(err, "Failed to reorder agents"));
   }
-}
+});

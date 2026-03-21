@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ThreadWithMessages, Agent, Message, MessageImage } from "@/lib/types";
-import { ChevronLeft, Copy, Pencil, RotateCcw, Send } from "lucide-react";
+import { ThreadWithMessages, Agent, Message, MessageImage, PermissionLevel, ThreadListItem } from "@/lib/types";
+import { ChevronLeft, Copy, Pencil, RotateCcw, Send, ShieldCheck, ShieldAlert, Shield } from "lucide-react";
 import Dialog from "./Dialog";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
@@ -25,10 +25,13 @@ export default function ThreadDetail({
   suggestions,
   onSuggestionSelect,
   onDraftChange,
+  permissionLevel,
+  onChangePermissionLevel,
+  workspaceThreads,
 }: {
   thread: ThreadWithMessages | null;
   streamingMessages: Map<string, { agentId: string; content: string; toolCalls?: import("@/lib/types").ToolCall[]; contentBlocks?: import("@/lib/types").ContentBlock[]; isReattach?: boolean }>;
-  onSendMessage: (content: string, images?: MessageImage[]) => void;
+  onSendMessage: (content: string, images?: MessageImage[], attachedThreadIds?: string[]) => void;
   onStop: (agentId: string) => void;
   onRenameThread?: (title: string) => void;
   isStreaming: boolean;
@@ -41,6 +44,9 @@ export default function ThreadDetail({
   suggestions?: string[];
   onSuggestionSelect?: (text: string) => void;
   onDraftChange?: (hasText: boolean) => void;
+  permissionLevel?: PermissionLevel;
+  onChangePermissionLevel?: (level: PermissionLevel) => void;
+  workspaceThreads?: ThreadListItem[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -48,6 +54,7 @@ export default function ThreadDetail({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: Message } | null>(null);
   const [rewindConfirm, setRewindConfirm] = useState<string | null>(null);
   const [revertCode, setRevertCode] = useState(false);
+  const [showPermDropdown, setShowPermDropdown] = useState(false);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -170,6 +177,65 @@ export default function ThreadDetail({
               <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
+          {/* Permission level indicator */}
+          {permissionLevel && onChangePermissionLevel && (
+            <div className="relative ml-auto shrink-0">
+              <button
+                onClick={() => setShowPermDropdown((v) => !v)}
+                className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  permissionLevel === "full"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                    : permissionLevel === "auto-edit"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                }`}
+                title="Change permission level for this thread"
+              >
+                {permissionLevel === "full" ? (
+                  <ShieldCheck className="h-3 w-3" />
+                ) : permissionLevel === "auto-edit" ? (
+                  <Shield className="h-3 w-3" />
+                ) : (
+                  <ShieldAlert className="h-3 w-3" />
+                )}
+                {permissionLevel === "full" ? "Full Autonomy" : permissionLevel === "auto-edit" ? "Auto-Edit" : "Supervised"}
+              </button>
+              {showPermDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowPermDropdown(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg">
+                    {(["supervised", "auto-edit", "full"] as PermissionLevel[]).map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => {
+                          onChangePermissionLevel(level);
+                          setShowPermDropdown(false);
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700 ${
+                          permissionLevel === level ? "font-semibold text-zinc-900 dark:text-zinc-100" : "text-zinc-600 dark:text-zinc-400"
+                        }`}
+                      >
+                        {level === "full" ? (
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                        ) : level === "auto-edit" ? (
+                          <Shield className="h-3.5 w-3.5 text-blue-600" />
+                        ) : (
+                          <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                        )}
+                        <div className="text-left">
+                          <div>{level === "full" ? "Full Autonomy" : level === "auto-edit" ? "Auto-Edit" : "Supervised"}</div>
+                          <div className="text-[10px] font-normal text-zinc-400">
+                            {level === "full" ? "All actions allowed" : level === "auto-edit" ? "Edits ok, no shell" : "Read-only"}
+                          </div>
+                        </div>
+                        {permissionLevel === level && <span className="ml-auto text-violet-600">&#10003;</span>}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto pt-3 pb-2">
@@ -178,6 +244,8 @@ export default function ThreadDetail({
           agents={thread.agents}
           displayName={displayName}
           onContextMenu={handleContextMenu}
+          permissionLevel={permissionLevel}
+          onChangePermissionLevel={onChangePermissionLevel}
         />
       </div>
       <div className="border-t border-zinc-200 dark:border-zinc-700">
@@ -199,6 +267,7 @@ export default function ThreadDetail({
           onDraftChange={onDraftChange}
           showTopBorder={false}
           compactTopPadding={hasQuickReplies}
+          workspaceThreads={workspaceThreads}
         />
       </div>
       {contextMenu && (

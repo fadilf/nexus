@@ -6,7 +6,9 @@
 - `npm run build` — Production build
 - `npm run lint` — ESLint (flat config, next/core-web-vitals + typescript)
 
-No test framework is configured.
+- `npm test` — Run tests (Vitest)
+- `npm run test:watch` — Run tests in watch mode
+
 
 ## Publishing
 

@@ -1,19 +1,25 @@
-import { NextResponse } from "next/server";
-import { loadAgents, loadDisplayName, saveDisplayName, loadPlugins, savePlugins, loadQuickReplies, saveQuickReplies } from "@/lib/agent-store";
+import { loadAgents, loadDisplayName, saveDisplayName, loadPlugins, savePlugins, loadQuickReplies, saveQuickReplies, loadToolCallGrouping, saveToolCallGrouping } from "@/lib/agent-store";
+import { route, routeWithJson } from "@/lib/api-route";
 
-export async function GET() {
-  const [agents, displayName, plugins, quickReplies] = await Promise.all([
+type ConfigBody = {
+  displayName?: string;
+  plugins?: Record<string, boolean>;
+  quickRepliesEnabled?: boolean;
+  toolCallGroupingEnabled?: boolean;
+};
+
+export const GET = route(async () => {
+  const [agents, displayName, plugins, quickReplies, toolCallGrouping] = await Promise.all([
     loadAgents(),
     loadDisplayName(),
     loadPlugins(),
     loadQuickReplies(),
+    loadToolCallGrouping(),
   ]);
-  return NextResponse.json({ agents, displayName, plugins, quickReplies });
-}
+  return { agents, displayName, plugins, quickReplies, toolCallGrouping };
+});
 
-export async function PATCH(request: Request) {
-  const body = await request.json();
-
+export const PATCH = routeWithJson<Record<string, never>, ConfigBody>(async ({ body }) => {
   if (typeof body.displayName === "string") {
     await saveDisplayName(body.displayName.trim());
   }
@@ -26,11 +32,15 @@ export async function PATCH(request: Request) {
     await saveQuickReplies({ enabled: body.quickRepliesEnabled });
   }
 
+  if (typeof body.toolCallGroupingEnabled === "boolean") {
+    await saveToolCallGrouping({ enabled: body.toolCallGroupingEnabled });
+  }
 
-  const [displayName, plugins, quickReplies] = await Promise.all([
+  const [displayName, plugins, quickReplies, toolCallGrouping] = await Promise.all([
     loadDisplayName(),
     loadPlugins(),
     loadQuickReplies(),
+    loadToolCallGrouping(),
   ]);
-  return NextResponse.json({ displayName, plugins, quickReplies });
-}
+  return { displayName, plugins, quickReplies, toolCallGrouping };
+});

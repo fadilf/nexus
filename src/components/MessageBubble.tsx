@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { AgentModel, Icon, Message } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import ReactMarkdown from "react-markdown";
@@ -88,9 +89,12 @@ export default function MessageBubble({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <img
+                <Image
                   src={`/api/uploads/${img.filename}${wsParam}`}
                   alt={img.filename}
+                  width={256}
+                  height={192}
+                  unoptimized
                   className="max-h-48 max-w-64 rounded-lg border border-white/20 object-cover"
                 />
               </a>

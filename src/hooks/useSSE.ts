@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { Agent, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Agent, MessageImage, ToolCall, ContentBlock, PermissionDenial } from "@/lib/types";
 
 type StreamingMessage = {
   agentId: string;
   content: string;
   toolCalls?: ToolCall[];
   contentBlocks?: ContentBlock[];
+  permissionDenials?: PermissionDenial[];
   isReattach?: boolean;
 };
 
@@ -47,18 +48,197 @@ export function useAgentStream(
     : emptyMap;
   const isStreaming = streamingMessages.size > 0;
 
+  // --- Shared SSE event processing ---
+
+  /** Apply a single parsed SSE event to the streaming state. Returns "done" status or null. */
+  const handleEvent = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (tid: string, agentId: string, event: any): string | null => {
+      const threadStreams = allStreams.current.get(tid);
+      if (!threadStreams) return event.type === "done";
+      const existing = threadStreams.get(agentId);
+
+      switch (event.type) {
+        case "initial": {
+          // Reattach-only: set (not append) persisted content
+          threadStreams.set(agentId, { agentId, content: event.content, isReattach: false });
+          triggerRender();
+          break;
+        }
+        case "content": {
+          const blocks = [...(existing?.contentBlocks ?? [])];
+          const lastBlock = blocks[blocks.length - 1];
+          if (lastBlock && lastBlock.type === "text") {
+            blocks[blocks.length - 1] = { type: "text", text: lastBlock.text + event.text };
+          } else {
+            blocks.push({ type: "text", text: event.text });
+          }
+          threadStreams.set(agentId, {
+            ...existing,
+            agentId,
+            content: (existing?.content ?? "") + event.text,
+            contentBlocks: blocks,
+          });
+          triggerRender();
+          break;
+        }
+        case "tool_start": {
+          const toolCalls = [...(existing?.toolCalls ?? [])];
+          const tc: ToolCall = { id: event.toolId, name: event.toolName, status: "running", input: event.input };
+          toolCalls.push(tc);
+          const blocks = [...(existing?.contentBlocks ?? [])];
+          blocks.push({ type: "tool_call", toolCall: tc });
+          threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
+          triggerRender();
+          break;
+        }
+        case "tool_result": {
+          const toolCalls = [...(existing?.toolCalls ?? [])];
+          const tc = toolCalls.find((t) => t.id === event.toolId);
+          if (tc) {
+            tc.status = "complete";
+            tc.output = event.output;
+          }
+          const blocks = [...(existing?.contentBlocks ?? [])];
+          const blockIdx = blocks.findIndex((b) => b.type === "tool_call" && b.toolCall.id === event.toolId);
+          if (blockIdx >= 0) {
+            const block = blocks[blockIdx] as { type: "tool_call"; toolCall: ToolCall };
+            blocks[blockIdx] = { type: "tool_call", toolCall: { ...block.toolCall, status: "complete", output: event.output } };
+          }
+          threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
+          triggerRender();
+          break;
+        }
+        case "mcp_app": {
+          const blocks = [...(existing?.contentBlocks ?? [])];
+          blocks.push({
+            type: "mcp_app",
+            toolName: event.toolName,
+            serverId: event.serverId,
+            toolInput: event.toolInput,
+            html: event.html,
+          });
+          threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", contentBlocks: blocks });
+          triggerRender();
+          break;
+        }
+        case "mcp_app_result": {
+          const blocks = [...(existing?.contentBlocks ?? [])];
+          const appIdx = blocks.findLastIndex((b) => b.type === "mcp_app" && (b as { toolName: string }).toolName === event.toolName);
+          if (appIdx >= 0) {
+            const block = blocks[appIdx] as { type: "mcp_app"; toolName: string; serverId: string; toolInput?: Record<string, unknown>; toolResult?: Record<string, unknown>; html?: string };
+            blocks[appIdx] = { ...block, toolResult: event.toolResult };
+          }
+          threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", contentBlocks: blocks });
+          triggerRender();
+          break;
+        }
+        case "permission_denials": {
+          const denials = [...(existing?.permissionDenials ?? []), ...event.denials];
+          threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", permissionDenials: denials });
+          triggerRender();
+          break;
+        }
+        case "suggestions": {
+          if (tid === threadIdRef.current) {
+            onSuggestionsRef.current?.(event.suggestions);
+          }
+          break;
+        }
+        case "done":
+          return event.status ?? "complete";
+        case "error":
+          setError(event.message);
+          break;
+      }
+      return null;
+    },
+    [triggerRender]
+  );
+
+  /** Read an SSE response body, dispatching parsed events to handleEvent. Returns done status. */
+  const consumeStream = useCallback(
+    async (body: ReadableStream<Uint8Array>, tid: string, agentId: string): Promise<string | null> => {
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            const status = handleEvent(tid, agentId, event);
+            if (status) return status;
+          } catch {
+            // Not valid JSON
+          }
+        }
+      }
+      return null;
+    },
+    [handleEvent]
+  );
+
+  /** Clean up streaming state after a stream ends (success or failure). */
+  const cleanupStream = useCallback(
+    (tid: string, agentId: string, success?: boolean) => {
+      const controllerKey = `${tid}:${agentId}`;
+      abortControllers.current.delete(controllerKey);
+      const threadStreams = allStreams.current.get(tid);
+      if (threadStreams) {
+        threadStreams.delete(agentId);
+        if (threadStreams.size === 0) {
+          allStreams.current.delete(tid);
+          onCompleteRef.current?.(tid);
+        }
+      }
+      // If the stream completed successfully and the user is on a different thread,
+      // mark this thread as unread so the sidebar shows the unread style.
+      if (success && tid !== threadIdRef.current) {
+        fetch(`/api/threads/${tid}/unread${wsParam()}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentId }),
+        }).catch(() => {});
+      }
+      triggerRender();
+    },
+    [triggerRender, wsParam]
+  );
+
+  // Abort all SSE connections when the hook unmounts (e.g. navigating away from a thread).
+  // This lets the server detect clientDisconnected and mark the thread as unread.
+  useEffect(() => {
+    const controllers = abortControllers.current;
+    return () => {
+      for (const controller of controllers.values()) {
+        controller.abort();
+      }
+    };
+  }, []);
+
+  // --- Public API ---
+
   const streamAgent = useCallback(
     async (
       targetThreadId: string,
       agentId: string,
       prompt: string,
-      images?: MessageImage[]
+      images?: MessageImage[],
+      attachedThreadIds?: string[]
     ) => {
       const controllerKey = `${targetThreadId}:${agentId}`;
       const controller = new AbortController();
       abortControllers.current.set(controllerKey, controller);
 
-      // Initialize streaming entry for this thread
       if (!allStreams.current.has(targetThreadId)) {
         allStreams.current.set(targetThreadId, new Map());
       }
@@ -67,6 +247,7 @@ export function useAgentStream(
         .set(agentId, { agentId, content: "" });
       triggerRender();
 
+      let doneStatus: string | null = null;
       try {
         const res = await fetch(`/api/threads/${targetThreadId}/stream${wsParam()}`, {
           method: "POST",
@@ -75,6 +256,7 @@ export function useAgentStream(
             agentId,
             prompt,
             ...(images && images.length > 0 ? { images } : {}),
+            ...(attachedThreadIds && attachedThreadIds.length > 0 ? { attachedThreadIds } : {}),
           }),
           signal: controller.signal,
         });
@@ -83,147 +265,27 @@ export function useAgentStream(
           throw new Error(`Stream failed: ${res.status}`);
         }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6);
-
-            try {
-              const event = JSON.parse(data);
-              if (event.type === "content") {
-                const threadStreams = allStreams.current.get(targetThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const lastBlock = blocks[blocks.length - 1];
-                  if (lastBlock && lastBlock.type === "text") {
-                    blocks[blocks.length - 1] = { type: "text", text: lastBlock.text + event.text };
-                  } else {
-                    blocks.push({ type: "text", text: event.text });
-                  }
-                  threadStreams.set(agentId, {
-                    ...existing,
-                    agentId,
-                    content: (existing?.content ?? "") + event.text,
-                    contentBlocks: blocks,
-                  });
-                  triggerRender();
-                }
-              } else if (event.type === "tool_start") {
-                const threadStreams = allStreams.current.get(targetThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const toolCalls = [...(existing?.toolCalls ?? [])];
-                  const tc: ToolCall = { id: event.toolId, name: event.toolName, status: "running", input: event.input };
-                  toolCalls.push(tc);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  blocks.push({ type: "tool_call", toolCall: tc });
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "tool_result") {
-                const threadStreams = allStreams.current.get(targetThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const toolCalls = [...(existing?.toolCalls ?? [])];
-                  const tc = toolCalls.find((t) => t.id === event.toolId);
-                  if (tc) {
-                    tc.status = "complete";
-                    tc.output = event.output;
-                  }
-                  // Also update the matching block
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const blockIdx = blocks.findIndex((b) => b.type === "tool_call" && b.toolCall.id === event.toolId);
-                  if (blockIdx >= 0) {
-                    const block = blocks[blockIdx] as { type: "tool_call"; toolCall: ToolCall };
-                    blocks[blockIdx] = { type: "tool_call", toolCall: { ...block.toolCall, status: "complete", output: event.output } };
-                  }
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "mcp_app") {
-                const threadStreams = allStreams.current.get(targetThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  blocks.push({
-                    type: "mcp_app",
-                    toolName: event.toolName,
-                    serverId: event.serverId,
-                    toolInput: event.toolInput,
-                    html: event.html,
-                  });
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "mcp_app_result") {
-                const threadStreams = allStreams.current.get(targetThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const appIdx = blocks.findLastIndex((b) => b.type === "mcp_app" && (b as { toolName: string }).toolName === event.toolName);
-                  if (appIdx >= 0) {
-                    const block = blocks[appIdx] as { type: "mcp_app"; toolName: string; serverId: string; toolInput?: Record<string, unknown>; toolResult?: Record<string, unknown>; html?: string };
-                    blocks[appIdx] = { ...block, toolResult: event.toolResult };
-                  }
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "suggestions") {
-                if (targetThreadId === threadIdRef.current) {
-                  onSuggestionsRef.current?.(event.suggestions);
-                }
-              } else if (event.type === "done") {
-                break;
-              } else if (event.type === "error") {
-                setError(event.message);
-              }
-            } catch {
-              // Not valid JSON
-            }
-          }
-        }
+        doneStatus = await consumeStream(res.body, targetThreadId, agentId);
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
           setError((err as Error).message);
         }
       } finally {
-        abortControllers.current.delete(controllerKey);
-        const threadStreams = allStreams.current.get(targetThreadId);
-        if (threadStreams) {
-          threadStreams.delete(agentId);
-          if (threadStreams.size === 0) {
-            allStreams.current.delete(targetThreadId);
-            // All agents for this thread are done
-            onCompleteRef.current?.(targetThreadId);
-          }
-        }
-        triggerRender();
+        cleanupStream(targetThreadId, agentId, doneStatus === "complete");
       }
     },
-    [triggerRender, wsParam]
+    [triggerRender, wsParam, consumeStream, cleanupStream]
   );
 
   const sendMessage = useCallback(
-    async (content: string, targetAgents: Agent[], images?: MessageImage[]) => {
+    async (content: string, targetAgents: Agent[], images?: MessageImage[], attachedThreadIds?: string[]) => {
       if (!threadId) return;
       const currentThreadId = threadId;
       setError(null);
 
       await Promise.all(
         targetAgents.map((agent) =>
-          streamAgent(currentThreadId, agent.id, content, images)
+          streamAgent(currentThreadId, agent.id, content, images, attachedThreadIds)
         )
       );
     },
@@ -254,7 +316,6 @@ export function useAgentStream(
       const controller = new AbortController();
       abortControllers.current.set(controllerKey, controller);
 
-      // Initialize streaming entry
       if (!allStreams.current.has(reattachThreadId)) {
         allStreams.current.set(reattachThreadId, new Map());
       }
@@ -263,6 +324,7 @@ export function useAgentStream(
         .set(agentId, { agentId, content: "", isReattach: true });
       triggerRender();
 
+      let doneStatus: string | null = null;
       try {
         const res = await fetch(
           `/api/threads/${reattachThreadId}/stream${wsParam()}`,
@@ -278,139 +340,16 @@ export function useAgentStream(
           throw new Error(`Re-attach failed: ${res.status}`);
         }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const event = JSON.parse(line.slice(6));
-              if (event.type === "initial") {
-                // Set (not append) persisted content
-                const threadStreams = allStreams.current.get(reattachThreadId);
-                if (threadStreams) {
-                  threadStreams.set(agentId, { agentId, content: event.content, isReattach: false });
-                  triggerRender();
-                }
-              } else if (event.type === "content") {
-                const threadStreams = allStreams.current.get(reattachThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const lastBlock = blocks[blocks.length - 1];
-                  if (lastBlock && lastBlock.type === "text") {
-                    blocks[blocks.length - 1] = { type: "text", text: lastBlock.text + event.text };
-                  } else {
-                    blocks.push({ type: "text", text: event.text });
-                  }
-                  threadStreams.set(agentId, {
-                    ...existing,
-                    agentId,
-                    content: (existing?.content ?? "") + event.text,
-                    contentBlocks: blocks,
-                  });
-                  triggerRender();
-                }
-              } else if (event.type === "tool_start") {
-                const threadStreams = allStreams.current.get(reattachThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const toolCalls = [...(existing?.toolCalls ?? [])];
-                  const tc: ToolCall = { id: event.toolId, name: event.toolName, status: "running", input: event.input };
-                  toolCalls.push(tc);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  blocks.push({ type: "tool_call", toolCall: tc });
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "tool_result") {
-                const threadStreams = allStreams.current.get(reattachThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const toolCalls = [...(existing?.toolCalls ?? [])];
-                  const tc = toolCalls.find((t) => t.id === event.toolId);
-                  if (tc) {
-                    tc.status = "complete";
-                    tc.output = event.output;
-                  }
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const blockIdx = blocks.findIndex((b) => b.type === "tool_call" && b.toolCall.id === event.toolId);
-                  if (blockIdx >= 0) {
-                    const block = blocks[blockIdx] as { type: "tool_call"; toolCall: ToolCall };
-                    blocks[blockIdx] = { type: "tool_call", toolCall: { ...block.toolCall, status: "complete", output: event.output } };
-                  }
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", toolCalls, contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "mcp_app") {
-                const threadStreams = allStreams.current.get(reattachThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  blocks.push({
-                    type: "mcp_app",
-                    toolName: event.toolName,
-                    serverId: event.serverId,
-                    toolInput: event.toolInput,
-                    html: event.html,
-                  });
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "mcp_app_result") {
-                const threadStreams = allStreams.current.get(reattachThreadId);
-                if (threadStreams) {
-                  const existing = threadStreams.get(agentId);
-                  const blocks = [...(existing?.contentBlocks ?? [])];
-                  const appIdx = blocks.findLastIndex((b) => b.type === "mcp_app" && (b as { toolName: string }).toolName === event.toolName);
-                  if (appIdx >= 0) {
-                    const block = blocks[appIdx] as { type: "mcp_app"; toolName: string; serverId: string; toolInput?: Record<string, unknown>; toolResult?: Record<string, unknown>; html?: string };
-                    blocks[appIdx] = { ...block, toolResult: event.toolResult };
-                  }
-                  threadStreams.set(agentId, { ...existing, agentId, content: existing?.content ?? "", contentBlocks: blocks });
-                  triggerRender();
-                }
-              } else if (event.type === "suggestions") {
-                if (reattachThreadId === threadIdRef.current) {
-                  onSuggestionsRef.current?.(event.suggestions);
-                }
-              } else if (event.type === "done") {
-                break;
-              } else if (event.type === "error") {
-                setError(event.message);
-              }
-            } catch {
-              // Not valid JSON
-            }
-          }
-        }
+        doneStatus = await consumeStream(res.body, reattachThreadId, agentId);
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
           console.error("Re-attach failed:", err);
         }
       } finally {
-        abortControllers.current.delete(controllerKey);
-        const threadStreams = allStreams.current.get(reattachThreadId);
-        if (threadStreams) {
-          threadStreams.delete(agentId);
-          if (threadStreams.size === 0) {
-            allStreams.current.delete(reattachThreadId);
-            onCompleteRef.current?.(reattachThreadId);
-          }
-        }
-        triggerRender();
+        cleanupStream(reattachThreadId, agentId, doneStatus === "complete");
       }
     },
-    [triggerRender, wsParam]
+    [triggerRender, wsParam, consumeStream, cleanupStream]
   );
 
   return {

@@ -1,33 +1,23 @@
-import { NextResponse } from "next/server";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import fs from "fs/promises";
 import path from "path";
+import { badRequest, routeWithWorkspace, serverError } from "@/lib/api-route";
 
 const HIDDEN_DIRS = new Set([
   "node_modules", ".git", "__pycache__", ".next", "dist",
   ".cache", ".turbo", "coverage", ".nyc_output", ".parcel-cache",
 ]);
 
-export async function GET(request: Request) {
-  let dir: string;
-  try {
-    dir = await resolveWorkspaceDir(request);
-  } catch {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 400 });
-  }
-
-  const url = new URL(request.url);
+export const GET = routeWithWorkspace(async ({ url, workspaceDir }) => {
   const relativePath = url.searchParams.get("path") || "";
   const showHidden = url.searchParams.get("showHidden") === "true";
 
-  // Path traversal protection
   if (relativePath.includes("..")) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+    throw badRequest("Invalid path");
   }
 
-  const resolved = path.resolve(dir, relativePath);
-  if (!resolved.startsWith(dir + path.sep) && resolved !== dir) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  const resolved = path.resolve(workspaceDir, relativePath);
+  if (!resolved.startsWith(workspaceDir + path.sep) && resolved !== workspaceDir) {
+    throw badRequest("Invalid path");
   }
 
   try {
@@ -53,8 +43,8 @@ export async function GET(request: Request) {
     const truncated = entries.length > 500;
     if (truncated) entries = entries.slice(0, 500);
 
-    return NextResponse.json({ entries, truncated });
+    return { entries, truncated };
   } catch {
-    return NextResponse.json({ error: "Cannot read directory" }, { status: 500 });
+    throw serverError("Cannot read directory");
   }
-}
+});

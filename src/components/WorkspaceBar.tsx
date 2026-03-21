@@ -49,7 +49,6 @@ export default function WorkspaceBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const iconPickerRef = useRef<HTMLDivElement>(null);
   const wsButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const hasVisiblePlugins = enabledPlugins.includes("git") || enabledPlugins.includes("files") || enabledPlugins.includes("terminal");
 
   useEffect(() => {
     if (editing && inputRef.current) {

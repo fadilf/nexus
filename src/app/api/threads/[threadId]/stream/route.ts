@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { getThread, addMessage, updateMessage, addUnreadAgent } from "@/lib/thread-store";
 import { getProcessManager } from "@/lib/process-manager";
 import { createStreamParser } from "@/lib/stream-parser";
-import { AgentModel, MessageImage, ToolCall, ContentBlock } from "@/lib/types";
+import { MessageImage, ToolCall, ContentBlock, PermissionDenial, isAgentModel } from "@/lib/types";
 import { loadAgents, loadQuickReplies } from "@/lib/agent-store";
 import { buildContextualPrompt, buildFullHistoryPrompt } from "@/lib/context";
 import { QUICK_REPLY_INSTRUCTION, parseQuickReplies } from "@/lib/quick-replies";
 import { stripMentions } from "@/lib/mentions";
 import path from "path";
-import { getUploadsDir } from "@/lib/config";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
+import { getUploadsDir, ENTOURAGE_DIR, THREADS_DIR } from "@/lib/config";
+import { resolveWorkspace } from "@/lib/workspace-context";
+import { resolvePermissionLevel } from "@/lib/permissions";
 import { captureSnapshot } from "@/lib/snapshots";
 import { getMcpClientManager } from "@/lib/mcp-client-manager";
 
@@ -17,17 +18,19 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ threadId: string }> }
 ) {
-  const workspaceDir = await resolveWorkspaceDir(request);
+  const workspace = await resolveWorkspace(request);
+  const workspaceDir = workspace.directory;
   const { threadId } = await params;
   const thread = await getThread(workspaceDir, threadId);
   if (!thread) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  const { agentId, prompt, images } = (await request.json()) as { agentId: string; prompt: string; images?: MessageImage[] };
+  const { agentId, prompt, images, attachedThreadIds } = (await request.json()) as { agentId: string; prompt: string; images?: MessageImage[]; attachedThreadIds?: string[] };
 
   // Resolve image paths
   const imagePaths = images?.map((img) => path.join(getUploadsDir(workspaceDir), img.filename)) ?? [];
+  const threadPaths = attachedThreadIds?.map((id) => path.join(workspaceDir, ENTOURAGE_DIR, THREADS_DIR, `${id}.json`)) ?? [];
 
   // Resolve fresh agent data from store (picks up personality edits)
   const allAgents = await loadAgents();
@@ -37,6 +40,10 @@ export async function POST(
   if (!agent) {
     return NextResponse.json({ error: "Agent not in thread" }, { status: 400 });
   }
+  if (!isAgentModel(agent.model)) {
+    return NextResponse.json({ error: "Unsupported agent model" }, { status: 400 });
+  }
+  const agentModel = agent.model;
 
   const pm = getProcessManager();
 
@@ -44,7 +51,7 @@ export async function POST(
   const existing = pm.getProcess(threadId, agentId);
   if (existing) {
     // Return existing buffer as SSE stream then continue piping
-    const reattachParser = createStreamParser(agent.model as AgentModel);
+    const reattachParser = createStreamParser(agentModel);
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();
@@ -94,6 +101,8 @@ export async function POST(
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
+        "Content-Encoding": "none",
+        "X-Accel-Buffering": "no",
       },
     });
   }
@@ -143,11 +152,14 @@ export async function POST(
   const mcpManager = getMcpClientManager();
   await mcpManager.connectAll().catch(() => {});
 
+  const permissionLevel = resolvePermissionLevel(thread, workspace);
+
   let accumulatedContent = "";
   const accumulatedToolCalls: ToolCall[] = [];
   const accumulatedBlocks: ContentBlock[] = [];
+  const accumulatedDenials: PermissionDenial[] = [];
   let lastPersist = Date.now();
-  const parser = createStreamParser(agent.model as AgentModel);
+  const parser = createStreamParser(agentModel);
 
   const stream = new ReadableStream({
     start(controller) {
@@ -162,7 +174,7 @@ export async function POST(
         pm.spawn(
           threadId,
           agent.id,
-          agent.model as AgentModel,
+          agentModel,
           enrichedPrompt,
           cwd,
           // onData
@@ -255,6 +267,11 @@ export async function POST(
                     } catch { /* non-JSON output, skip */ }
                   }
                 }
+              } else if (event.type === "permission_denials") {
+                accumulatedDenials.push(...event.denials);
+                try {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+                } catch { /* Client disconnected */ }
               } else if (event.type === "error") {
                 // API-level error from the CLI (e.g. rate limit, auth failure)
                 const errorText = `[Error: ${event.message}]`;
@@ -313,6 +330,7 @@ export async function POST(
               ...(accumulatedToolCalls.length > 0 ? { toolCalls: accumulatedToolCalls } : {}),
               ...(accumulatedBlocks.length > 0 ? { contentBlocks: accumulatedBlocks } : {}),
               ...(inlineSuggestions.length > 0 ? { suggestions: inlineSuggestions } : {}),
+              ...(accumulatedDenials.length > 0 ? { permissionDenials: accumulatedDenials } : {}),
             }).catch(() => {});
 
             try {
@@ -345,7 +363,9 @@ export async function POST(
           hasHistory,
           effectivePersonality,
           imagePaths.length > 0 ? imagePaths : undefined,
-          fullHistoryPrompt
+          fullHistoryPrompt,
+          permissionLevel,
+          threadPaths.length > 0 ? threadPaths : undefined
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
@@ -364,6 +384,8 @@ export async function POST(
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "Content-Encoding": "none",
+      "X-Accel-Buffering": "no",
     },
   });
 }

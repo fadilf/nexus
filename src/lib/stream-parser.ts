@@ -5,14 +5,14 @@ export type StreamEvent =
   | { type: "tool_start"; toolId: string; toolName: string; input?: string }
   | { type: "tool_result"; toolId: string; output: string }
   | { type: "done"; status: "complete" | "error" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "permission_denials"; denials: { toolName: string; toolInput?: Record<string, unknown> }[] };
 
 
 
 export function createStreamParser(model: AgentModel): (chunk: string) => StreamEvent[] {
   let buffer = "";
   const codexExtractor = model === "codex" ? createCodexEventExtractor() : null;
-  const openCodeExtractor = model === "opencode" ? createOpenCodeEventExtractor() : null;
 
   return (chunk: string): StreamEvent[] => {
     buffer += chunk;
@@ -36,6 +36,21 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
             (Array.isArray(errors) && errors.length > 0 ? errors[0] : null) ??
             "Process ended with an error";
           events.push({ type: "error", message });
+          // Fall through to check for permission_denials below
+        }
+
+        // Claude CLI: extract permission denials from result events
+        if (json.type === "result" && Array.isArray(json.permission_denials) && json.permission_denials.length > 0) {
+          const denials = (json.permission_denials as Array<Record<string, unknown>>).map((d) => ({
+            toolName: typeof d.tool_name === "string" ? d.tool_name : "unknown",
+            ...(d.tool_input ? { toolInput: d.tool_input as Record<string, unknown> } : {}),
+          }));
+          events.push({ type: "permission_denials", denials });
+          continue;
+        }
+
+        // Skip further processing for error results (already pushed error event above)
+        if (json.type === "result" && (json.status === "error" || json.is_error === true)) {
           continue;
         }
 
@@ -43,13 +58,6 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
         if (codexExtractor) {
           const codexEvents = codexExtractor(json);
           events.push(...codexEvents);
-          continue;
-        }
-
-        // OpenCode CLI events (from --format json JSONL)
-        if (openCodeExtractor) {
-          const openCodeEvents = openCodeExtractor(json);
-          events.push(...openCodeEvents);
           continue;
         }
 
@@ -78,7 +86,7 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
         }
       } catch {
         // Not JSON — only treat as content for Claude (which may emit plain text)
-        // For Gemini/Codex/OpenCode, non-JSON lines are diagnostic noise
+        // For Gemini/Codex, non-JSON lines are diagnostic noise
         if (trimmed && model === "claude") {
           events.push({ type: "content", text: trimmed });
         }
@@ -200,61 +208,6 @@ function createCodexEventExtractor(): (json: Record<string, unknown>) => StreamE
     }
 
     // Skip: thread.started, turn.started, turn.completed, reasoning, todo_list, web_search, collab_tool_call
-    return events;
-  };
-}
-
-/**
- * Create a stateful OpenCode event extractor.
- *
- * OpenCode CLI (--format json) emits JSONL with these event types:
- *   step_start, text, tool_use, step_finish
- *
- * Tool events arrive with state.status "completed" containing both
- * input and output in a single event.
- */
-function createOpenCodeEventExtractor(): (json: Record<string, unknown>) => StreamEvent[] {
-  return (json: Record<string, unknown>): StreamEvent[] => {
-    const events: StreamEvent[] = [];
-    const type = json.type as string;
-
-    // Text content
-    if (type === "text") {
-      const part = json.part as Record<string, unknown> | undefined;
-      if (part && typeof part.text === "string") {
-        events.push({ type: "content", text: part.text });
-      }
-      return events;
-    }
-
-    // Tool use — OpenCode sends completed tool calls with input + output in one event
-    if (type === "tool_use") {
-      const part = json.part as Record<string, unknown> | undefined;
-      if (part) {
-        const callID = typeof part.callID === "string" ? part.callID : "unknown";
-        const toolName = typeof part.tool === "string" ? part.tool : "tool";
-        const state = part.state as Record<string, unknown> | undefined;
-        const input = state?.input ? JSON.stringify(state.input) : undefined;
-        events.push({ type: "tool_start", toolId: callID, toolName, input });
-
-        if (state?.status === "completed") {
-          const output = typeof state.output === "string" ? state.output : JSON.stringify(state.output ?? "");
-          events.push({ type: "tool_result", toolId: callID, output });
-        }
-      }
-      return events;
-    }
-
-    // Step finish with reason "stop" means the agent is done
-    if (type === "step_finish") {
-      const part = json.part as Record<string, unknown> | undefined;
-      if (part?.reason === "stop") {
-        events.push({ type: "done", status: "complete" });
-      }
-      return events;
-    }
-
-    // step_start and other events are silently consumed
     return events;
   };
 }

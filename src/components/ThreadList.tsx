@@ -43,7 +43,7 @@ function ThreadItem({
   const hasRunning = threadStatuses.some((s) => s.status === "running");
   const hasError = threadStatuses.some((s) => s.status === "error");
   const unreadAgents = unreadByThread?.[thread.id];
-  const hasUnread = unreadAgents && unreadAgents.length > 0;
+  const hasUnread = (unreadAgents?.length ?? 0) > 0;
 
   return (
     <div
@@ -108,18 +108,19 @@ function ThreadItem({
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <span className={`truncate text-sm text-zinc-900 dark:text-zinc-100 ${hasUnread ? "font-semibold" : "font-medium"}`}>
             {thread.title}
           </span>
           <div className="flex shrink-0 items-center gap-1.5">
             {hasRunning && (
-              <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+              <span className="streaming-dots flex items-center gap-0.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+              </span>
             )}
-            {!hasRunning && hasUnread && (
-              <span className="h-2 w-2 rounded-full bg-violet-500" />
-            )}
-            {(hasRunning || hasError) && (
-              <AgentStatusBadge status={hasRunning ? "running" : "error"} />
+            {!hasRunning && hasError && (
+              <AgentStatusBadge status="error" />
             )}
             <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
               {formatDate(thread.updatedAt)}
@@ -127,7 +128,7 @@ function ThreadItem({
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+          <span className={`truncate text-xs ${hasUnread ? "font-semibold text-zinc-900 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}>
             {thread.lastMessagePreview}
           </span>
           <div className="flex shrink-0 items-center gap-1.5">

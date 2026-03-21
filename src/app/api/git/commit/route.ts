@@ -1,31 +1,25 @@
-import { NextResponse } from "next/server";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import simpleGit from "simple-git";
+import { badRequest, getErrorMessage, routeWithWorkspaceJson, serverError } from "@/lib/api-route";
 
-export async function POST(request: Request) {
-  let dir: string;
-  try {
-    dir = await resolveWorkspaceDir(request);
-  } catch {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 400 });
-  }
+type GitCommitBody = {
+  message?: string;
+};
 
-  const { message } = await request.json();
-
+export const POST = routeWithWorkspaceJson<Record<string, never>, GitCommitBody>(async ({ body, workspaceDir }) => {
+  const { message } = body;
   if (!message || typeof message !== "string" || !message.trim()) {
-    return NextResponse.json({ error: "Commit message required" }, { status: 400 });
+    throw badRequest("Commit message required");
   }
 
-  const git = simpleGit(dir);
+  const git = simpleGit(workspaceDir);
 
   try {
     const result = await git.commit(message.trim());
-    return NextResponse.json({
+    return {
       hash: result.commit || "",
       message: message.trim(),
-    });
+    };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Git error";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    throw serverError(getErrorMessage(err, "Git error"));
   }
-}
+});

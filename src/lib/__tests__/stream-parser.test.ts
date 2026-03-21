@@ -1,0 +1,145 @@
+import { describe, it, expect } from "vitest";
+import { createStreamParser, StreamEvent } from "../stream-parser";
+
+function parse(model: Parameters<typeof createStreamParser>[0], lines: string[]): StreamEvent[] {
+  const parser = createStreamParser(model);
+  return lines.flatMap((line) => parser(line + "\n"));
+}
+
+describe("createStreamParser", () => {
+  describe("Claude", () => {
+    it("extracts text from assistant messages", () => {
+      const events = parse("claude", [
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "Hello world" }] },
+        }),
+      ]);
+      expect(events).toEqual([{ type: "content", text: "Hello world" }]);
+    });
+
+    it("extracts tool_use from assistant messages", () => {
+      const events = parse("claude", [
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            content: [{ type: "tool_use", id: "t1", name: "Read", input: { path: "/foo" } }],
+          },
+        }),
+      ]);
+      expect(events).toEqual([
+        { type: "tool_start", toolId: "t1", toolName: "Read", input: '{"path":"/foo"}' },
+      ]);
+    });
+
+    it("extracts tool_result from user messages", () => {
+      const events = parse("claude", [
+        JSON.stringify({
+          type: "user",
+          message: {
+            content: [{ type: "tool_result", tool_use_id: "t1", content: "file contents" }],
+          },
+        }),
+      ]);
+      expect(events).toEqual([{ type: "tool_result", toolId: "t1", output: "file contents" }]);
+    });
+
+    it("treats non-JSON lines as content for Claude", () => {
+      const events = parse("claude", ["plain text output"]);
+      expect(events).toEqual([{ type: "content", text: "plain text output" }]);
+    });
+
+    it("ignores non-JSON lines for Gemini", () => {
+      const events = parse("gemini", ["diagnostic noise"]);
+      expect(events).toEqual([]);
+    });
+
+    it("handles error result events", () => {
+      const events = parse("claude", [
+        JSON.stringify({
+          type: "result",
+          status: "error",
+          error: { message: "something broke" },
+        }),
+      ]);
+      expect(events).toEqual([{ type: "error", message: "something broke" }]);
+    });
+
+    it("handles permission denials", () => {
+      const events = parse("claude", [
+        JSON.stringify({
+          type: "result",
+          permission_denials: [{ tool_name: "Bash", tool_input: { command: "rm -rf /" } }],
+        }),
+      ]);
+      expect(events).toEqual([
+        {
+          type: "permission_denials",
+          denials: [{ toolName: "Bash", toolInput: { command: "rm -rf /" } }],
+        },
+      ]);
+    });
+  });
+
+  describe("Gemini", () => {
+    it("extracts text content", () => {
+      const events = parse("gemini", [JSON.stringify({ text: "Hello from Gemini" })]);
+      expect(events).toEqual([{ type: "content", text: "Hello from Gemini" }]);
+    });
+
+    it("extracts tool events", () => {
+      const events = parse("gemini", [
+        JSON.stringify({
+          type: "tool_use",
+          tool_id: "t1",
+          tool_name: "read_file",
+          parameters: { path: "/foo" },
+        }),
+        JSON.stringify({ type: "tool_result", tool_id: "t1", output: "contents" }),
+      ]);
+      expect(events).toEqual([
+        { type: "tool_start", toolId: "t1", toolName: "read_file", input: '{"path":"/foo"}' },
+        { type: "tool_result", toolId: "t1", output: "contents" },
+      ]);
+    });
+
+    it("skips init and user messages", () => {
+      const events = parse("gemini", [
+        JSON.stringify({ type: "init" }),
+        JSON.stringify({ role: "user", content: "echo" }),
+      ]);
+      expect(events).toEqual([]);
+    });
+  });
+
+  describe("Codex", () => {
+    it("extracts incremental text from agent_message items", () => {
+      const parser = createStreamParser("codex");
+      const e1 = parser(JSON.stringify({ type: "item.updated", item: { type: "agent_message", id: "m1", text: "Hel" } }) + "\n");
+      const e2 = parser(JSON.stringify({ type: "item.updated", item: { type: "agent_message", id: "m1", text: "Hello" } }) + "\n");
+      expect(e1).toEqual([{ type: "content", text: "Hel" }]);
+      expect(e2).toEqual([{ type: "content", text: "lo" }]);
+    });
+
+    it("extracts command execution events", () => {
+      const events = parse("codex", [
+        JSON.stringify({ type: "item.started", item: { type: "command_execution", id: "c1", command: "ls" } }),
+        JSON.stringify({ type: "item.completed", item: { type: "command_execution", id: "c1", aggregated_output: "file.txt" } }),
+      ]);
+      expect(events).toEqual([
+        { type: "tool_start", toolId: "c1", toolName: "shell", input: "ls" },
+        { type: "tool_result", toolId: "c1", output: "file.txt" },
+      ]);
+    });
+  });
+
+  describe("buffering", () => {
+    it("handles split chunks across calls", () => {
+      const parser = createStreamParser("claude");
+      const e1 = parser('{"type":"assistant","message":{"content":[{"type":"text","tex');
+      expect(e1).toEqual([]); // incomplete line buffered
+      const e2 = parser('t":"hi"}]}}\n');
+      expect(e2).toEqual([{ type: "content", text: "hi" }]);
+    });
+  });
+});

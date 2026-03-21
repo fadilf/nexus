@@ -1,14 +1,10 @@
-import { NextResponse } from "next/server";
 import { removeMcpServer } from "@/lib/mcp-store";
 import { getMcpClientManager } from "@/lib/mcp-client-manager";
+import { route } from "@/lib/api-route";
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ serverId: string }> }
-) {
-  const { serverId } = await params;
+export const DELETE = route<{ serverId: string }>(async ({ params }) => {
   const manager = getMcpClientManager();
-  await manager.disconnect(serverId);
-  await removeMcpServer(serverId);
-  return NextResponse.json({ ok: true });
-}
+  await manager.disconnect(params.serverId);
+  await removeMcpServer(params.serverId);
+  return { ok: true };
+});

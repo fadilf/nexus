@@ -1,23 +1,27 @@
-import { NextResponse } from "next/server";
 import { loadAgents, createAgent } from "@/lib/agent-store";
+import { badRequest, created, getErrorMessage, route, routeWithJson } from "@/lib/api-route";
+import { AgentModel, Icon } from "@/lib/types";
 
-export async function GET() {
-  const agents = await loadAgents();
-  return NextResponse.json(agents);
-}
+type CreateAgentBody = {
+  name?: string;
+  model?: AgentModel;
+  avatarColor?: string;
+  icon?: Icon;
+  personality?: string;
+};
 
-export async function POST(request: Request) {
-  const body = await request.json();
+export const GET = route(async () => loadAgents());
+
+export const POST = routeWithJson<Record<string, never>, CreateAgentBody>(async ({ body }) => {
   const { name, model, avatarColor, icon, personality } = body;
-
   if (!name || !model || !avatarColor) {
-    return NextResponse.json({ error: "name, model, and avatarColor are required" }, { status: 400 });
+    throw badRequest("name, model, and avatarColor are required");
   }
 
   try {
     const agent = await createAgent({ name, model, avatarColor, icon, personality });
-    return NextResponse.json(agent, { status: 201 });
+    return created(agent);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    throw badRequest(getErrorMessage(err, "Failed to create agent"));
   }
-}
+});

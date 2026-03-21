@@ -1,17 +1,19 @@
-import { NextResponse } from "next/server";
 import { reorderWorkspaces } from "@/lib/workspace-store";
+import { badRequest, getErrorMessage, routeWithJson } from "@/lib/api-route";
 
-export async function PUT(request: Request) {
-  const { orderedIds } = (await request.json()) as { orderedIds: string[] };
+type ReorderWorkspacesBody = {
+  orderedIds?: string[];
+};
 
+export const PUT = routeWithJson<Record<string, never>, ReorderWorkspacesBody>(async ({ body }) => {
+  const { orderedIds } = body;
   if (!Array.isArray(orderedIds)) {
-    return NextResponse.json({ error: "orderedIds must be an array" }, { status: 400 });
+    throw badRequest("orderedIds must be an array");
   }
 
   try {
-    const workspaces = await reorderWorkspaces(orderedIds);
-    return NextResponse.json(workspaces);
+    return await reorderWorkspaces(orderedIds);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    throw badRequest(getErrorMessage(err, "Failed to reorder workspaces"));
   }
-}
+});

@@ -1,6 +1,6 @@
 import { spawn as cpSpawn, ChildProcess } from "child_process";
 import { getCliCommand } from "./config";
-import { ThreadProcess, AgentModel } from "./types";
+import { ThreadProcess, AgentModel, PermissionLevel } from "./types";
 import crypto from "crypto";
 
 type ProcessEntry = {
@@ -47,7 +47,6 @@ function isResumeError(json: Record<string, unknown>, model: AgentModel): boolea
   if (json.type === "result" && json.is_error === true) return true;
   // Codex: turn.failed or stream-level error
   if (model === "codex" && (json.type === "turn.failed" || json.type === "error")) return true;
-  // OpenCode: resume errors come as non-JSON (NotFoundError stack trace), not as JSON events
   return false;
 }
 
@@ -60,10 +59,6 @@ function hasSuccessSignal(json: Record<string, unknown>, model: AgentModel): boo
     const t = json.type as string;
     return t === "item.started" || t === "item.updated" || t === "item.completed" || t === "turn.started";
   }
-  if (model === "opencode") {
-    const t = json.type as string;
-    return t === "step_start" || t === "text" || t === "tool_use";
-  }
   // Claude/Gemini: anything that's not a "result" event
   return json.type !== "result";
 }
@@ -73,7 +68,6 @@ class ProcessManager {
   private usedSessions = new Set<string>(); // Track sessions that have been used
   private killedSessions = new Set<string>(); // Track sessions killed intentionally
   private sessionOverrides = new Map<string, string>(); // Override sessionId after rewind
-  private openCodeSessions = new Map<string, string>(); // OpenCode-generated ses_* IDs
 
   private key(threadId: string, agentId: string): string {
     return `${threadId}:${agentId}`;
@@ -93,11 +87,8 @@ class ProcessManager {
     ].join("-");
   }
 
-  private getSessionId(threadId: string, agentId: string, model?: AgentModel): string {
+  private getSessionId(threadId: string, agentId: string): string {
     const k = this.key(threadId, agentId);
-    if (model === "opencode") {
-      return this.openCodeSessions.get(k) ?? "";
-    }
     return this.sessionOverrides.get(k) ?? this.baseSessionId(threadId, agentId);
   }
 
@@ -117,23 +108,23 @@ class ProcessManager {
     hasHistory: boolean = false,
     personality?: string,
     imagePaths?: string[],
-    fullHistoryPrompt?: string
+    fullHistoryPrompt?: string,
+    permissionLevel: PermissionLevel = "full",
+    threadPaths?: string[]
   ): ChildProcess {
     const k = this.key(threadId, agentId);
 
     // Kill existing process if any
     this.kill(threadId, agentId);
 
-    const sessionId = this.getSessionId(threadId, agentId, model);
+    const sessionId = this.getSessionId(threadId, agentId);
     const wasRewound = this.sessionOverrides.has(k);
-    const isResume = model === "opencode"
-      ? (!!sessionId && (this.usedSessions.has(sessionId) || hasHistory)) && !wasRewound
-      : (this.usedSessions.has(sessionId) || hasHistory) && !wasRewound;
+    const isResume = (this.usedSessions.has(sessionId) || hasHistory) && !wasRewound;
 
     // After rewind, use full history prompt so the fresh session has full context
     const effectivePrompt = (!isResume && wasRewound && fullHistoryPrompt) ? fullHistoryPrompt : prompt;
 
-    const { cmd, args } = getCliCommand(model, effectivePrompt, sessionId, isResume, personality, imagePaths);
+    const { cmd, args } = getCliCommand(model, effectivePrompt, sessionId, isResume, personality, imagePaths, permissionLevel, threadPaths);
 
     const child = cpSpawn(cmd, args, {
       cwd,
@@ -165,20 +156,6 @@ class ProcessManager {
         entry.buffer.shift();
       }
 
-      // Capture OpenCode session ID from JSON events (always overwrite — handles retry spawns)
-      if (model === "opencode") {
-        for (const line of chunk.split("\n")) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          try {
-            const json = JSON.parse(trimmed);
-            if (typeof json.sessionID === "string") {
-              this.openCodeSessions.set(k, json.sessionID);
-            }
-          } catch { /* non-JSON line */ }
-        }
-      }
-
       if (deferredChunks) {
         // Check if this chunk contains a non-error line, meaning resume succeeded
         const hasNonErrorContent = chunk.split("\n").some((line) => {
@@ -188,7 +165,7 @@ class ProcessManager {
             const json = JSON.parse(trimmed);
             return hasSuccessSignal(json, model);
           } catch {
-            return model !== "codex" && model !== "opencode"; // Non-JSON: real content for Claude, noise for Codex/OpenCode
+            return model !== "codex"; // Non-JSON: real content for Claude, noise for Codex
           }
         });
         if (hasNonErrorContent) {
@@ -229,8 +206,6 @@ class ProcessManager {
       // The CLI may exit with code 0 but output an error JSON with is_error:true.
       const resumeFailedWithError = isResume && entry.buffer.length > 0 && (() => {
         const output = entry.buffer.join("").trim();
-        // OpenCode: resume failure outputs a NotFoundError stack trace (non-JSON)
-        if (model === "opencode" && output.includes("NotFoundError")) return true;
         try {
           const lastLine = output.split("\n").filter(l => l.trim()).pop() ?? "";
           const json = JSON.parse(lastLine);
@@ -245,10 +220,9 @@ class ProcessManager {
         // Retry with --session-id to start a fresh CLI session.
         if (isResume && (entry.buffer.length === 0 || resumeFailedWithError)) {
           this.processes.delete(k);
-          this.openCodeSessions.delete(k);
           // Use full history prompt so the fresh session has conversation context
           const retryPrompt = fullHistoryPrompt || prompt;
-          const fresh = getCliCommand(model, retryPrompt, sessionId, false, personality, imagePaths);
+          const fresh = getCliCommand(model, retryPrompt, sessionId, false, personality, imagePaths, permissionLevel, threadPaths);
           const retryChild = cpSpawn(fresh.cmd, fresh.args, {
             cwd,
             stdio: ["ignore", "pipe", "pipe"],
@@ -356,10 +330,9 @@ class ProcessManager {
     const toKill: string[] = [];
     for (const [key, entry] of this.processes) {
       if (entry.threadId === threadId) {
-        const sessionId = this.getSessionId(entry.threadId, entry.agentId, entry.model);
+        const sessionId = this.getSessionId(entry.threadId, entry.agentId);
         this.usedSessions.delete(sessionId);
         this.killedSessions.add(sessionId);
-        if (entry.model === "opencode") this.openCodeSessions.delete(this.key(entry.threadId, entry.agentId));
         try {
           entry.process.kill("SIGTERM");
           const timer = setTimeout(() => {

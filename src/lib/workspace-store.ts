@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
-import { Workspace, Icon } from "./types";
+import { Workspace, Icon, PermissionLevel } from "./types";
 const WORKSPACE_FILE = path.join(os.homedir(), ".entourage", "workspaces.json");
 
 type WorkspaceData = { workspaces: Workspace[] };
@@ -57,7 +57,7 @@ export async function removeWorkspace(id: string): Promise<void> {
   await saveData(data);
 }
 
-type WorkspaceUpdates = { name?: string; color?: string; icon?: Icon | null };
+type WorkspaceUpdates = { name?: string; color?: string; icon?: Icon | null; permissionLevel?: PermissionLevel };
 
 export async function updateWorkspace(id: string, updates: WorkspaceUpdates): Promise<Workspace> {
   const data = await loadData();

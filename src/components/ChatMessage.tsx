@@ -1,15 +1,19 @@
 "use client";
 
+import Image from "next/image";
 import { memo, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { Message } from "@/lib/types";
+import { Message, PermissionLevel, ContentBlock, ToolCall } from "@/lib/types";
 import { parseQuickReplies } from "@/lib/quick-replies";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import { useWsParam } from "@/contexts/WorkspaceContext";
+import { useWorkspaceLayout } from "@/contexts/WorkspaceLayoutContext";
 import ToolCallBlock from "./ToolCallBlock";
+import ToolCallGroup from "./ToolCallGroup";
 import McpAppBlock from "./McpAppBlock";
+import PermissionDenialBanner from "./PermissionDenialBanner";
 
 function renderMentions(content: string) {
   const parts = content.split(/(@\w+)/g);
@@ -139,16 +143,58 @@ function MarkdownBlock({ content, isStreaming }: { content: string; isStreaming?
   );
 }
 
+type GroupedBlock =
+  | { type: "text"; text: string; key: number }
+  | { type: "tool_call"; toolCall: ToolCall; key: string }
+  | { type: "tool_group"; toolCalls: ToolCall[]; key: string }
+  | { type: "mcp_app"; block: ContentBlock & { type: "mcp_app" }; key: string; index: number };
+
+function groupConsecutiveToolCalls(blocks: ContentBlock[]): GroupedBlock[] {
+  const result: GroupedBlock[] = [];
+  let pendingTools: ToolCall[] = [];
+
+  const flushTools = () => {
+    if (pendingTools.length === 0) return;
+    if (pendingTools.length === 1) {
+      result.push({ type: "tool_call", toolCall: pendingTools[0], key: pendingTools[0].id });
+    } else {
+      result.push({ type: "tool_group", toolCalls: [...pendingTools], key: pendingTools.map((t) => t.id).join(",") });
+    }
+    pendingTools = [];
+  };
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.type === "tool_call") {
+      pendingTools.push(block.toolCall);
+    } else {
+      flushTools();
+      if (block.type === "mcp_app") {
+        result.push({ type: "mcp_app", block: block as ContentBlock & { type: "mcp_app" }, key: `mcp-${block.toolName}-${i}`, index: i });
+      } else {
+        result.push({ type: "text", text: (block as ContentBlock & { type: "text" }).text, key: i });
+      }
+    }
+  }
+  flushTools();
+  return result;
+}
+
 export default memo(function ChatMessage({
   message,
   isUser,
   onContextMenu,
+  permissionLevel,
+  onChangePermissionLevel,
 }: {
   message: Message;
   isUser: boolean;
   onContextMenu?: (message: Message, x: number, y: number) => void;
+  permissionLevel?: PermissionLevel;
+  onChangePermissionLevel?: (level: PermissionLevel) => void;
 }) {
   const wsParam = useWsParam();
+  const { toolCallGroupingEnabled } = useWorkspaceLayout();
   const isError = message.status === "error";
   const isStreaming = message.status === "streaming";
   const sanitizedContent = !isUser ? parseQuickReplies(message.content || "").cleaned : (message.content || "");
@@ -190,35 +236,62 @@ export default memo(function ChatMessage({
           {renderMentions(sanitizedContent)}
         </div>
       ) : sanitizedBlocks && sanitizedBlocks.length > 0 ? (
-        /* Interleaved content blocks — tool calls rendered in-place */
-        <>
-          {sanitizedBlocks.map((block, i) =>
-            block.type === "tool_call" ? (
-              <ToolCallBlock key={block.toolCall.id} toolCall={block.toolCall} />
-            ) : block.type === "mcp_app" ? (
-              <McpAppBlock
-                key={`mcp-${block.toolName}-${i}`}
-                toolName={block.toolName}
-                serverId={block.serverId}
-                toolInput={block.toolInput}
-                toolResult={block.toolResult}
-                html={block.html}
-              />
-            ) : (
-              <MarkdownBlock key={i} content={block.text} isStreaming={isStreaming} />
-            )
-          )}
-        </>
+        /* Interleaved content blocks — optionally group consecutive tool calls */
+        toolCallGroupingEnabled ? (
+          <>
+            {groupConsecutiveToolCalls(sanitizedBlocks).map((grouped) =>
+              grouped.type === "tool_group" ? (
+                <ToolCallGroup key={grouped.key} toolCalls={grouped.toolCalls} />
+              ) : grouped.type === "tool_call" ? (
+                <ToolCallBlock key={grouped.key} toolCall={grouped.toolCall} />
+              ) : grouped.type === "mcp_app" ? (
+                <McpAppBlock
+                  key={grouped.key}
+                  toolName={grouped.block.toolName}
+                  serverId={grouped.block.serverId}
+                  toolInput={grouped.block.toolInput}
+                  toolResult={grouped.block.toolResult}
+                  html={grouped.block.html}
+                />
+              ) : (
+                <MarkdownBlock key={grouped.key} content={grouped.text} isStreaming={isStreaming} />
+              )
+            )}
+          </>
+        ) : (
+          <>
+            {sanitizedBlocks.map((block, i) =>
+              block.type === "tool_call" ? (
+                <ToolCallBlock key={block.toolCall.id} toolCall={block.toolCall} />
+              ) : block.type === "mcp_app" ? (
+                <McpAppBlock
+                  key={`mcp-${block.toolName}-${i}`}
+                  toolName={block.toolName}
+                  serverId={block.serverId}
+                  toolInput={block.toolInput}
+                  toolResult={block.toolResult}
+                  html={block.html}
+                />
+              ) : (
+                <MarkdownBlock key={i} content={block.text} isStreaming={isStreaming} />
+              )
+            )}
+          </>
+        )
       ) : (
-        /* Legacy fallback: tool calls before text */
+        /* Legacy fallback */
         <>
-          {message.toolCalls && message.toolCalls.length > 0 && (
+          {message.toolCalls && message.toolCalls.length > 1 && toolCallGroupingEnabled ? (
+            <div className="mb-1">
+              <ToolCallGroup toolCalls={message.toolCalls} />
+            </div>
+          ) : message.toolCalls && message.toolCalls.length > 0 ? (
             <div className="mb-1">
               {message.toolCalls.map((tc) => (
                 <ToolCallBlock key={tc.id} toolCall={tc} />
               ))}
             </div>
-          )}
+          ) : null}
           <MarkdownBlock content={sanitizedContent} isStreaming={isStreaming} />
         </>
       )}
@@ -233,14 +306,26 @@ export default memo(function ChatMessage({
               target="_blank"
               rel="noopener noreferrer"
             >
-              <img
+              <Image
                 src={`/api/uploads/${img.filename}${wsParam}`}
                 alt={img.filename}
+                width={256}
+                height={192}
+                unoptimized
                 className="max-h-48 max-w-64 rounded-lg border border-zinc-200 dark:border-zinc-700 object-cover"
               />
             </a>
           ))}
         </div>
+      )}
+
+      {/* Permission denial banner */}
+      {!isUser && message.permissionDenials && message.permissionDenials.length > 0 && (
+        <PermissionDenialBanner
+          denials={message.permissionDenials}
+          currentLevel={permissionLevel}
+          onChangeLevel={onChangePermissionLevel}
+        />
       )}
 
       {/* Streaming states */}

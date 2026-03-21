@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Loader2, Check, X } from "lucide-react";
+import { ChevronDown, Loader2, Check, X } from "lucide-react";
 import { ToolCall } from "@/lib/types";
 
 function truncateOutput(text: string, maxLines = 8): { text: string; truncated: boolean } {
@@ -44,25 +44,25 @@ function StatusIcon({ status }: { status: ToolCall["status"] }) {
   return <X className="h-3 w-3 text-red-500" />;
 }
 
-export default function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
+export default function ToolCallBlock({ toolCall, grouped }: { toolCall: ToolCall; grouped?: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   const inputSummary = toolCall.input ? formatInput(toolCall.input) : "";
 
   return (
-    <div className="my-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 text-xs">
+    <div className={grouped ? "text-xs" : "my-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 text-xs"}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-700/50 rounded-md transition-colors"
+        className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors ${grouped ? "" : "rounded-md"}`}
       >
-        <ChevronRight
-          className={`h-3 w-3 shrink-0 text-zinc-400 transition-transform ${expanded ? "rotate-90" : ""}`}
-        />
         <StatusIcon status={toolCall.status} />
         <span className="font-medium text-zinc-700 dark:text-zinc-300">{toolCall.name}</span>
         {inputSummary && (
           <span className="truncate text-zinc-500 dark:text-zinc-400">{inputSummary}</span>
         )}
+        <ChevronDown
+          className={`ml-auto h-3 w-3 shrink-0 text-zinc-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
       </button>
 
       {expanded && (

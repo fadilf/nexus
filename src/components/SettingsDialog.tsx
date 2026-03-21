@@ -1,13 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Agent, AgentModel, Icon } from "@/lib/types";
+import { Agent, AgentModel, Icon, PermissionLevel } from "@/lib/types";
 import { PLUGINS } from "@/lib/plugins";
 import Dialog from "./Dialog";
 import ModelIcon from "./ModelIcon";
 import IconPicker from "./IconPicker";
-import { ArrowLeft, ChevronRight, GripVertical, Pencil, Trash2, Sun, Moon } from "lucide-react";
+import { ArrowLeft, ChevronRight, GripVertical, Pencil, Trash2, Sun, Moon, ShieldCheck, Shield, ShieldAlert } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useWorkspaceId } from "@/contexts/WorkspaceContext";
+
+const PERMISSION_LEVELS: { value: PermissionLevel; label: string; description: string; icon: typeof ShieldCheck }[] = [
+  { value: "supervised", label: "Supervised", description: "Read-only — agents can't write files or run commands", icon: ShieldAlert },
+  { value: "auto-edit", label: "Auto-Edit", description: "File edits allowed, shell commands blocked", icon: Shield },
+  { value: "full", label: "Full Autonomy", description: "All actions allowed (current default)", icon: ShieldCheck },
+];
 
 type AgentFormData = {
   name: string;
@@ -54,12 +61,15 @@ export default function SettingsDialog({
   const [savedDisplayName, setSavedDisplayName] = useState("");
   const [plugins, setPlugins] = useState<Record<string, boolean>>({});
   const [quickRepliesEnabled, setQuickRepliesEnabled] = useState(false);
+  const [toolCallGroupingEnabled, setToolCallGroupingEnabled] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [mcpForm, setMcpForm] = useState({ name: "", url: "", command: "", args: "" });
   const [mcpAdding, setMcpAdding] = useState(false);
   const [mcpAdvanced, setMcpAdvanced] = useState(false);
+  const workspaceId = useWorkspaceId();
+  const [wsPermissionLevel, setWsPermissionLevel] = useState<PermissionLevel>("full");
 
   const fetchAgents = useCallback(async () => {
     const res = await fetch(`/api/agents`);
@@ -81,16 +91,30 @@ export default function SettingsDialog({
       if (data.quickReplies) {
         setQuickRepliesEnabled(data.quickReplies.enabled);
       }
+      if (data.toolCallGrouping) {
+        setToolCallGroupingEnabled(data.toolCallGrouping.enabled);
+      }
     }
   }, []);
+
+  const fetchWorkspacePermission = useCallback(async () => {
+    if (!workspaceId) return;
+    const res = await fetch("/api/workspaces");
+    if (res.ok) {
+      const workspaces = await res.json();
+      const ws = workspaces.find((w: { id: string }) => w.id === workspaceId);
+      if (ws) setWsPermissionLevel(ws.permissionLevel ?? "full");
+    }
+  }, [workspaceId]);
 
   useEffect(() => {
     if (open) {
       fetchAgents();
       fetchConfig();
       fetchMcpServers();
+      fetchWorkspacePermission();
     }
-  }, [open, fetchAgents, fetchConfig, fetchMcpServers]);
+  }, [open, fetchAgents, fetchConfig, fetchMcpServers, fetchWorkspacePermission]);
 
   const handleSaveDisplayName = async () => {
     const res = await fetch(`/api/config`, {
@@ -265,7 +289,7 @@ export default function SettingsDialog({
               <div>
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Model</label>
                 <div className="mt-1 flex gap-1">
-                  {(["claude", "gemini", "codex", "opencode"] as const).map((m) => (
+                  {(["claude", "gemini", "codex"] as const).map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -411,6 +435,77 @@ export default function SettingsDialog({
                     }`}
                   />
                 </button>
+              </div>
+
+              {/* Tool Call Grouping */}
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <div>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Group Tool Calls</span>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">Collapse consecutive tool calls into an accordion</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    const next = !toolCallGroupingEnabled;
+                    setToolCallGroupingEnabled(next);
+                    await fetch("/api/config", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ toolCallGroupingEnabled: next }),
+                    });
+                  }}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    toolCallGroupingEnabled ? "bg-violet-600" : "bg-zinc-300 dark:bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      toolCallGroupingEnabled ? "translate-x-5" : ""
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Permission Level */}
+              <div className="px-3 py-2.5">
+                <div className="mb-2">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Default Permission Level</span>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">Controls what agents can do in new threads for this workspace</p>
+                </div>
+                <div className="space-y-1">
+                  {PERMISSION_LEVELS.map(({ value, label, description, icon: IconComp }) => (
+                    <button
+                      key={value}
+                      onClick={async () => {
+                        setWsPermissionLevel(value);
+                        if (workspaceId) {
+                          await fetch(`/api/workspaces/${workspaceId}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ permissionLevel: value }),
+                          });
+                        }
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                        wsPermissionLevel === value
+                          ? "bg-zinc-100 dark:bg-zinc-700 ring-1 ring-zinc-300 dark:ring-zinc-600"
+                          : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                      }`}
+                    >
+                      <IconComp className={`h-4 w-4 shrink-0 ${
+                        value === "full" ? "text-emerald-600" : value === "auto-edit" ? "text-blue-600" : "text-amber-600"
+                      }`} />
+                      <div className="min-w-0">
+                        <div className={`text-sm ${wsPermissionLevel === value ? "font-semibold text-zinc-900 dark:text-zinc-100" : "font-medium text-zinc-700 dark:text-zinc-300"}`}>
+                          {label}
+                        </div>
+                        <div className="text-xs text-zinc-400 dark:text-zinc-500">{description}</div>
+                      </div>
+                      {wsPermissionLevel === value && (
+                        <span className="ml-auto text-violet-600 dark:text-violet-400">&#10003;</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
 
             </div>

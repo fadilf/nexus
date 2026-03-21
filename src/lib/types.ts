@@ -1,4 +1,17 @@
-export type AgentModel = "claude" | "gemini" | "codex" | "opencode";
+export const AGENT_MODELS = ["claude", "gemini", "codex"] as const;
+
+export type AgentModel = (typeof AGENT_MODELS)[number];
+
+export function isAgentModel(value: unknown): value is AgentModel {
+  return typeof value === "string" && AGENT_MODELS.includes(value as AgentModel);
+}
+
+export type PermissionLevel = "supervised" | "auto-edit" | "full";
+
+export type PermissionDenial = {
+  toolName: string;
+  toolInput?: Record<string, unknown>;
+};
 
 export type Icon =
   | { type: "lucide"; name: string }
@@ -23,6 +36,7 @@ export type Thread = {
   updatedAt: string;
   archived?: boolean;
   unreadAgents?: string[];
+  permissionLevel?: PermissionLevel;
 };
 
 export type MessageImage = {
@@ -65,9 +79,11 @@ export type Message = {
   timestamp: string;
   status: "streaming" | "complete" | "error";
   images?: MessageImage[];
+  attachedThreads?: string[];  // Thread IDs attached as reference context
   toolCalls?: ToolCall[];
   contentBlocks?: ContentBlock[];
   suggestions?: string[];
+  permissionDenials?: PermissionDenial[];
   isReattach?: boolean;
   snapshotTreeHash?: string;
 };
@@ -93,6 +109,7 @@ export type Workspace = {
   color: string;
   addedAt: string;
   icon?: Icon;
+  permissionLevel?: PermissionLevel;
 };
 
 export type Plugin = {

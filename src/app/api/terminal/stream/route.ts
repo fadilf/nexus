@@ -48,6 +48,8 @@ export async function GET(request: Request) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "Content-Encoding": "none",
+      "X-Accel-Buffering": "no",
     },
   });
 }

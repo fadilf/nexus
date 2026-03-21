@@ -1,22 +1,20 @@
-import { NextResponse } from "next/server";
 import { listThreads, createThread } from "@/lib/thread-store";
 import { loadAgents } from "@/lib/agent-store";
-import { resolveWorkspaceDir } from "@/lib/workspace-context";
 import { Agent } from "@/lib/types";
+import { badRequest, created, routeWithWorkspace, routeWithWorkspaceJson } from "@/lib/api-route";
 
-export async function GET(request: Request) {
-  const workspaceDir = await resolveWorkspaceDir(request);
-  const threads = await listThreads(workspaceDir);
-  return NextResponse.json(threads);
-}
+type CreateThreadBody = {
+  title?: string;
+  agentIds?: string[];
+};
 
-export async function POST(request: Request) {
-  const workspaceDir = await resolveWorkspaceDir(request);
-  const body = await request.json();
-  const { title, agentIds } = body as { title: string; agentIds: string[] };
+export const GET = routeWithWorkspace(async ({ workspaceDir }) => listThreads(workspaceDir));
 
+export const POST = routeWithWorkspaceJson<Record<string, never>, CreateThreadBody>(
+  async ({ body, workspaceDir }) => {
+    const { title, agentIds } = body;
   if (!title || !agentIds?.length) {
-    return NextResponse.json({ error: "title and agentIds required" }, { status: 400 });
+      throw badRequest("title and agentIds required");
   }
 
   const allAgents = await loadAgents();
@@ -25,9 +23,10 @@ export async function POST(request: Request) {
     .filter((a): a is Agent => a !== undefined);
 
   if (!agents.length) {
-    return NextResponse.json({ error: "No valid agents specified" }, { status: 400 });
+      throw badRequest("No valid agents specified");
   }
 
   const thread = await createThread(workspaceDir, title, agents);
-  return NextResponse.json(thread, { status: 201 });
-}
+    return created(thread);
+  }
+);

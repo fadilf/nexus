@@ -1,24 +1,38 @@
-import { NextResponse } from "next/server";
 import { getMcpClientManager } from "@/lib/mcp-client-manager";
+import { ApiRouteError, badRequest, getErrorMessage, routeWithJson, serverError } from "@/lib/api-route";
 
-export async function POST(request: Request) {
-  const { action, serverId, toolName, args, uri } = await request.json();
+type McpProxyBody = {
+  action?: string;
+  serverId?: string;
+  toolName?: string;
+  args?: Record<string, unknown>;
+  uri?: string;
+};
+
+export const POST = routeWithJson<Record<string, never>, McpProxyBody>(async ({ body }) => {
+  const { action, serverId, toolName, args, uri } = body;
   const manager = getMcpClientManager();
 
   try {
     if (action === "readResource") {
+      if (!serverId || !uri) {
+        throw badRequest("serverId and uri are required");
+      }
       const html = await manager.readResource(serverId, uri);
-      return NextResponse.json({ html });
+      return { html };
     }
     if (action === "callTool") {
+      if (!serverId || !toolName) {
+        throw badRequest("serverId and toolName are required");
+      }
       const result = await manager.callTool(serverId, toolName, args ?? {});
-      return NextResponse.json({ result });
+      return { result };
     }
-    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    throw badRequest("Unknown action");
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message },
-      { status: 500 }
-    );
+    if (err instanceof ApiRouteError) {
+      throw err;
+    }
+    throw serverError(getErrorMessage(err, "MCP proxy error"));
   }
-}
+});

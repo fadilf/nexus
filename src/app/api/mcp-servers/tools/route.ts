@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { getMcpClientManager } from "@/lib/mcp-client-manager";
+import { route } from "@/lib/api-route";
 
-export async function GET() {
+export const GET = route(async () => {
   const manager = getMcpClientManager();
-  return NextResponse.json(manager.getAllAppTools());
-}
+  return manager.getAllAppTools();
+});

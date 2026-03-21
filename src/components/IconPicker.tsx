@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import {
   Bot, Brain, Code, Terminal, Lightbulb, Shield, Zap, Search, Eye, Hammer,
@@ -28,7 +29,16 @@ export function renderIcon(icon: Icon, className: string = "h-4 w-4") {
     return <span className={className} style={{ fontSize: "1em", lineHeight: 1 }}>{icon.value}</span>;
   }
   if (icon.type === "image") {
-    return <img src={`/api/workspace-icons/${icon.imageId}?ext=${icon.ext}`} alt="" className={`${className} rounded-full object-cover`} />;
+    return (
+      <Image
+        src={`/api/workspace-icons/${icon.imageId}?ext=${icon.ext}`}
+        alt=""
+        width={16}
+        height={16}
+        unoptimized
+        className={`${className} rounded-full object-cover`}
+      />
+    );
   }
   const IconComponent = ICON_MAP[icon.name];
   if (!IconComponent) return <Bot className={className} />;
@@ -127,9 +137,12 @@ export default function IconPicker({
         <div className="space-y-2">
           {value?.type === "image" && (
             <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <img
+              <Image
                 src={`/api/workspace-icons/${value.imageId}?ext=${value.ext}`}
                 alt=""
+                width={32}
+                height={32}
+                unoptimized
                 className="h-8 w-8 rounded-full object-cover"
               />
               <span>Current image</span>

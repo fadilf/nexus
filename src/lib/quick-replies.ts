@@ -1,4 +1,4 @@
-export const QUICK_REPLY_INSTRUCTION = `\nAfter responding, append exactly one <QuickReply> block containing 1-3 brief follow-up suggestions the user might send. Put each suggestion inside its own <Option> tag, and do not output any text after </QuickReply>.\n<QuickReply>\n<Option>suggestion text</Option>\n<Option>another suggestion</Option>\n</QuickReply>`;
+export const QUICK_REPLY_INSTRUCTION = `\nAfter responding, append exactly one <QuickReply> block containing 1-3 brief follow-up suggestions the user might send. Put each suggestion inside its own <Option> tag, and never output any text after </QuickReply>.\n<QuickReply>\n<Option>suggestion text</Option>\n<Option>another suggestion</Option>\n</QuickReply>`;
 
 const CLOSE_TAG = "</QuickReply>";
 const OPEN_TAG = "<QuickReply>";
