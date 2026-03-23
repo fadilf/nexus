@@ -63,7 +63,7 @@ export function getCliCommand(model: AgentModel, prompt: string, sessionId: stri
   }
 
   if (model === "claude") {
-    const args = ["-p", fullPrompt, "--output-format", "stream-json", "--verbose"];
+    const args = ["-p", fullPrompt, "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
     const isRoot = process.getuid?.() === 0;
     if (!isRoot) {
       if (permissionLevel === "full") {

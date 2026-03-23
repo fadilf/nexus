@@ -68,16 +68,17 @@ export default function ThreadDetail({
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Derive a primitive value from streamingMessages to avoid re-firing on reference changes
-  const streamingContentKey = Array.from(streamingMessages.values())
-    .map((s) => s.content.length)
+  // Derive a primitive key from streaming state to detect content, tool call, and block changes
+  // (streamingMessages is a ref-backed Map whose reference never changes)
+  const streamingStateKey = Array.from(streamingMessages.values())
+    .map((s) => `${s.content.length}:${s.toolCalls?.length ?? 0}:${s.contentBlocks?.length ?? 0}`)
     .join(",");
 
   useEffect(() => {
     if (scrollRef.current && isNearBottomRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [thread?.messages.length, streamingContentKey]);
+  }, [thread?.messages.length, streamingStateKey]);
 
   const handleContextMenu = useCallback((message: Message, x: number, y: number) => {
     setContextMenu({ x, y, message });
@@ -109,7 +110,8 @@ export default function ThreadDetail({
       (m) => !(m.status === "streaming" && m.agentId && streamingAgentIds.has(m.agentId))
     );
     return [...filteredMessages, ...streamingMsgs];
-  }, [thread, streamingMessages]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread, streamingStateKey]);
 
   if (!thread) {
     return (

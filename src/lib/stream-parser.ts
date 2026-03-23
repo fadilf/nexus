@@ -13,6 +13,8 @@ export type StreamEvent =
 export function createStreamParser(model: AgentModel): (chunk: string) => StreamEvent[] {
   let buffer = "";
   const codexExtractor = model === "codex" ? createCodexEventExtractor() : null;
+  // Track whether we've received streaming deltas (to skip duplicate final assistant message)
+  let receivedStreamDeltas = false;
 
   return (chunk: string): StreamEvent[] => {
     buffer += chunk;
@@ -26,6 +28,27 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
 
       try {
         const json = JSON.parse(trimmed);
+
+        // Claude CLI: handle stream_event wrappers (from --include-partial-messages)
+        // These contain raw API events like content_block_delta with incremental text
+        if (model === "claude" && json.type === "stream_event" && json.event) {
+          const inner = json.event as Record<string, unknown>;
+          const innerType = inner.type as string;
+
+          if (innerType === "content_block_delta") {
+            const delta = inner.delta as Record<string, unknown> | undefined;
+            if (delta?.type === "text_delta" && typeof delta.text === "string") {
+              receivedStreamDeltas = true;
+              events.push({ type: "content", text: delta.text });
+            }
+            // Handle tool input deltas (for streaming tool use)
+            if (delta?.type === "input_json_delta" && typeof delta.partial_json === "string") {
+              receivedStreamDeltas = true;
+            }
+          }
+          // content_block_start, content_block_stop, message_start, message_delta — skip
+          continue;
+        }
 
         // Handle error result events from both CLIs
         if (json.type === "result" && (json.status === "error" || json.is_error === true)) {
@@ -58,6 +81,17 @@ export function createStreamParser(model: AgentModel): (chunk: string) => Stream
         if (codexExtractor) {
           const codexEvents = codexExtractor(json);
           events.push(...codexEvents);
+          continue;
+        }
+
+        // Claude CLI: skip the final assistant message if we already got streaming deltas
+        // (the assistant message contains the full text which would duplicate delta content)
+        if (model === "claude" && json.type === "assistant" && receivedStreamDeltas) {
+          // Still extract tool events from the final message
+          const toolEvents = extractClaudeToolEvents(json);
+          if (toolEvents.length > 0) {
+            events.push(...toolEvents);
+          }
           continue;
         }
 
