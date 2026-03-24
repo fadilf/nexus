@@ -279,6 +279,9 @@ export function useAgentStream(
         .get(targetThreadId)!
         .set(agentId, { agentId, content: "" });
       triggerRender();
+      // Yield to let React render the empty streaming state ("Thinking..." indicator)
+      // before the fetch begins and content events start arriving.
+      await new Promise((r) => setTimeout(r, 0));
 
       let doneStatus: string | null = null;
       try {

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { memo, useEffect, useState } from "react";
+import { memo, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Message, PermissionLevel, ContentBlock, ToolCall } from "@/lib/types";
 import { parseQuickReplies } from "@/lib/quick-replies";
@@ -197,16 +197,6 @@ export default memo(function ChatMessage({
   const { toolCallGroupingEnabled } = useWorkspaceLayout();
   const isError = message.status === "error";
   const isStreaming = message.status === "streaming";
-  // With incremental streaming, the first content delta can arrive in the same
-  // render batch as the empty streaming message, so "Thinking..." never shows.
-  // Use a minimum display timer: show "Thinking..." for at least 800ms when
-  // streaming starts (component mounts fresh for each streaming message).
-  const [thinkingExpired, setThinkingExpired] = useState(false);
-  useEffect(() => {
-    if (!isStreaming) return;
-    const timer = setTimeout(() => setThinkingExpired(true), 800);
-    return () => clearTimeout(timer);
-  }, [isStreaming]);
   const sanitizedContent = !isUser ? parseQuickReplies(message.content || "").cleaned : (message.content || "");
   const sanitizedBlocks = !isUser && message.contentBlocks
     ? message.contentBlocks.map((block) =>
@@ -339,7 +329,7 @@ export default memo(function ChatMessage({
       )}
 
       {/* Streaming states */}
-      {isStreaming && (!thinkingExpired || !sanitizedContent) && (
+      {isStreaming && !sanitizedContent && (
         <span className="text-xs text-zinc-400 italic">Thinking...</span>
       )}
     </div>

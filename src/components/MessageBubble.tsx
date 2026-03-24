@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
 import { AgentModel, Icon, Message } from "@/lib/types";
 import ModelIcon from "./ModelIcon";
 import ReactMarkdown from "react-markdown";
@@ -68,13 +67,6 @@ export default function MessageBubble({
 
   const isError = message.status === "error";
   const isStreaming = message.status === "streaming";
-  // Minimum "Thinking..." display time (see ChatMessage.tsx for full explanation)
-  const [thinkingExpired, setThinkingExpired] = useState(false);
-  useEffect(() => {
-    if (!isStreaming) return;
-    const timer = setTimeout(() => setThinkingExpired(true), 800);
-    return () => clearTimeout(timer);
-  }, [isStreaming]);
 
   return (
     <div className={`flex gap-3 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
@@ -166,7 +158,7 @@ export default function MessageBubble({
               </ReactMarkdown>
             </div>
           )}
-          {isStreaming && (!thinkingExpired || !message.content) && (
+          {isStreaming && !message.content && (
             <span className="text-xs text-zinc-400 dark:text-zinc-500 italic">Thinking...</span>
           )}
           {isStreaming && (
