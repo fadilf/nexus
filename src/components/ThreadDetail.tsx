@@ -384,7 +384,19 @@ export default function ThreadDetail({
             {
               label: "Copy message",
               icon: <Copy className="h-4 w-4" />,
-              onClick: () => navigator.clipboard.writeText(contextMenu.message.content),
+              onClick: () => {
+                navigator.clipboard.writeText(contextMenu.message.content).catch(() => {
+                  // Fallback for browsers that block clipboard API (e.g. mobile without secure context)
+                  const textarea = document.createElement("textarea");
+                  textarea.value = contextMenu.message.content;
+                  textarea.style.position = "fixed";
+                  textarea.style.opacity = "0";
+                  document.body.appendChild(textarea);
+                  textarea.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(textarea);
+                });
+              },
             },
             ...(contextMenu.message.role === "user"
               ? [{

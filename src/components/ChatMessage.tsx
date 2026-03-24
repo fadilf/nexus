@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { memo, useState } from "react";
+import { memo, useState, useRef, useCallback } from "react";
 import { Check, Copy } from "lucide-react";
 import { Message, PermissionLevel, ContentBlock, ToolCall } from "@/lib/types";
 import { parseQuickReplies } from "@/lib/quick-replies";
@@ -33,7 +33,16 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(code).catch(() => {
+      const textarea = document.createElement("textarea");
+      textarea.value = code;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -60,7 +69,16 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   );
 }
 
+function isLocalPath(src: string): boolean {
+  if (!src) return false;
+  if (/^https?:\/\//i.test(src)) return false;
+  if (src.startsWith("data:")) return false;
+  if (src.startsWith("blob:")) return false;
+  return true;
+}
+
 function MarkdownBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+  const wsParam = useWsParam();
   if (!content && isStreaming) return null;
   if (!content) return null;
   return (
@@ -116,6 +134,22 @@ function MarkdownBlock({ content, isStreaming }: { content: string; isStreaming?
             <tr className="even:bg-zinc-50 dark:even:bg-zinc-800">{children}</tr>
           ),
           hr: () => <hr className="my-2 border-zinc-200 dark:border-zinc-700" />,
+          img: ({ src, alt }) => {
+            if (!src || typeof src !== "string") return null;
+            const resolvedSrc = isLocalPath(src)
+              ? `/api/files/raw?path=${encodeURIComponent(src)}${wsParam ? `&${wsParam.slice(1)}` : ""}`
+              : src;
+            return (
+              <a href={resolvedSrc} target="_blank" rel="noopener noreferrer" className="inline-block my-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={resolvedSrc}
+                  alt={alt || ""}
+                  className="max-h-64 max-w-full rounded-lg border border-zinc-200 dark:border-zinc-700"
+                />
+              </a>
+            );
+          },
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           pre: ({ children }) => <>{children}</>,
           code: ({ className, children }) => {
@@ -204,6 +238,26 @@ export default memo(function ChatMessage({
       )
     : message.contentBlocks;
 
+  // Long-press to open context menu on mobile (touchscreens)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!onContextMenu) return;
+    const touch = e.touches[0];
+    longPressPos.current = { x: touch.clientX, y: touch.clientY };
+    longPressTimer.current = setTimeout(() => {
+      onContextMenu(message, longPressPos.current.x, longPressPos.current.y);
+    }, 500);
+  }, [onContextMenu, message]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
   return (
     <div
       className="group relative py-0.5 px-1 -mx-1 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800"
@@ -212,6 +266,9 @@ export default memo(function ChatMessage({
         e.preventDefault();
         onContextMenu(message, e.clientX, e.clientY);
       }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
     >
       {/* Hover timestamp */}
       <div className="absolute right-2 top-1 hidden text-[11px] text-zinc-400 group-hover:block">
