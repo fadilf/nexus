@@ -3,21 +3,12 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import { McpServerConfig } from "./types";
+import { createWriteLock } from "./write-lock";
 
 const GLOBAL_CONFIG_DIR = path.join(os.homedir(), ".entourage");
 const MCP_CONFIG_PATH = path.join(GLOBAL_CONFIG_DIR, "mcp-servers.json");
 
-let writeLock: Promise<void> = Promise.resolve();
-
-function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = writeLock;
-  const next = prev.then(fn, fn);
-  writeLock = next.then(
-    () => {},
-    () => {}
-  );
-  return next;
-}
+const withLock = createWriteLock();
 
 export async function loadMcpServers(): Promise<McpServerConfig[]> {
   try {

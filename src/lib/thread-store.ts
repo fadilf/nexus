@@ -3,6 +3,7 @@ import path from "path";
 import { ENTOURAGE_DIR, THREADS_DIR } from "./config";
 import { Thread, Message, ThreadWithMessages, ThreadListItem, Agent, PermissionLevel, isAgentModel } from "./types";
 import { getProcessManager } from "./process-manager";
+import { createKeyedWriteLock } from "./write-lock";
 
 function getThreadsDir(workspaceDir: string): string {
   return path.join(workspaceDir, ENTOURAGE_DIR, THREADS_DIR);
@@ -12,15 +13,7 @@ function getThreadPath(workspaceDir: string, threadId: string): string {
   return path.join(getThreadsDir(workspaceDir), `${threadId}.json`);
 }
 
-// Per-thread write lock to serialize file writes
-const locks = new Map<string, Promise<void>>();
-
-function withLock<T>(threadId: string, fn: () => Promise<T>): Promise<T> {
-  const prev = locks.get(threadId) ?? Promise.resolve();
-  const next = prev.then(fn, fn);
-  locks.set(threadId, next.then(() => {}, () => {}));
-  return next;
-}
+const withLock = createKeyedWriteLock();
 
 function sanitizeThreadAgents(thread: Thread): boolean {
   const supportedAgents = thread.agents.filter((agent) =>

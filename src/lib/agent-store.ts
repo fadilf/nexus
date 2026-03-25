@@ -2,30 +2,50 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
-import { DEFAULT_AGENTS, DEFAULT_AGENT_IDS } from "./config";
-import { Agent, isAgentModel } from "./types";
+import { DEFAULT_AGENTS, DEFAULT_AGENT_IDS, DEFAULT_CLI_MODELS } from "./config";
+import { Agent, AgentModel, CliModelDefaults, isAgentModel } from "./types";
+import { createWriteLock } from "./write-lock";
 
 type QuickRepliesConfig = { enabled: boolean };
 type ToolCallGroupingConfig = { enabled: boolean };
-type Config = { agents: Agent[]; displayName?: string; plugins?: Record<string, boolean>; quickReplies?: QuickRepliesConfig; toolCallGrouping?: ToolCallGroupingConfig };
+type Config = {
+  agents: Agent[];
+  displayName?: string;
+  plugins?: Record<string, boolean>;
+  quickReplies?: QuickRepliesConfig;
+  toolCallGrouping?: ToolCallGroupingConfig;
+  defaultCliModels?: CliModelDefaults;
+};
 
 const GLOBAL_CONFIG_DIR = path.join(os.homedir(), ".entourage");
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CONFIG_DIR, "config.json");
 
-// Write lock to serialize file writes
-let writeLock: Promise<void> = Promise.resolve();
-
-function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = writeLock;
-  const next = prev.then(fn, fn);
-  writeLock = next.then(() => {}, () => {});
-  return next;
-}
+const withLock = createWriteLock();
 
 let migrated = false;
 
 function hasSupportedModel(agent: Agent): boolean {
   return isAgentModel((agent as { model: unknown }).model);
+}
+
+function sanitizeCliModelDefaults(value: unknown): CliModelDefaults {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const sanitized: CliModelDefaults = {};
+  for (const [key, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    if (!isAgentModel(key) || typeof rawValue !== "string") {
+      continue;
+    }
+
+    const trimmed = rawValue.trim();
+    if (trimmed) {
+      sanitized[key as AgentModel] = trimmed;
+    }
+  }
+
+  return sanitized;
 }
 
 async function migrateIfNeeded(): Promise<void> {
@@ -66,6 +86,7 @@ async function loadConfig(): Promise<Config> {
     const config: Config = {
       ...parsed,
       agents: Array.isArray(parsed.agents) ? parsed.agents.filter(hasSupportedModel) : [],
+      defaultCliModels: sanitizeCliModelDefaults(parsed.defaultCliModels),
     };
     let changed = !Array.isArray(parsed.agents) || config.agents.length !== parsed.agents.length;
 
@@ -95,6 +116,7 @@ async function saveConfig(config: Config): Promise<void> {
     const sanitized: Config = {
       ...config,
       agents: config.agents.filter(hasSupportedModel),
+      defaultCliModels: sanitizeCliModelDefaults(config.defaultCliModels),
     };
     await mkdir(GLOBAL_CONFIG_DIR, { recursive: true });
     await writeFile(GLOBAL_CONFIG_PATH, JSON.stringify(sanitized, null, 2));
@@ -127,6 +149,19 @@ export async function loadDisplayName(): Promise<string> {
 export async function saveDisplayName(displayName: string): Promise<void> {
   const config = await loadConfig();
   await saveConfig({ ...config, displayName: displayName || undefined });
+}
+
+export async function loadDefaultCliModels(): Promise<CliModelDefaults> {
+  const config = await loadConfig();
+  return {
+    ...DEFAULT_CLI_MODELS,
+    ...config.defaultCliModels,
+  };
+}
+
+export async function saveDefaultCliModels(defaultCliModels: CliModelDefaults): Promise<void> {
+  const config = await loadConfig();
+  await saveConfig({ ...config, defaultCliModels });
 }
 
 export async function loadPlugins(): Promise<Record<string, boolean>> {
@@ -170,6 +205,7 @@ function validateAgentName(name: string): void {
 export async function createAgent(data: {
   name: string;
   model: Agent["model"];
+  cliModel?: string;
   avatarColor: string;
   icon?: Agent["icon"];
   personality?: string;
@@ -188,6 +224,7 @@ export async function createAgent(data: {
     id: crypto.randomUUID(),
     name: data.name,
     model: data.model,
+    cliModel: data.cliModel?.trim() || undefined,
     avatarColor: data.avatarColor,
     icon: data.icon,
     personality: data.personality,
@@ -217,7 +254,11 @@ export async function updateAgent(id: string, updates: Partial<Omit<Agent, "id" 
     }
   }
 
-  agents[idx] = { ...agents[idx], ...updates };
+  agents[idx] = {
+    ...agents[idx],
+    ...updates,
+    ...(updates.cliModel !== undefined ? { cliModel: updates.cliModel?.trim() || undefined } : {}),
+  };
   await saveAgents(agents);
   return agents[idx];
 }
